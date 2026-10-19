@@ -93,6 +93,8 @@ This mirrors the image pattern: the Controller is at the top, the Maintenance an
 # 6. Agent Architecture
 
 ## Controller Agent
+The Controller Agent is the main orchestrator. It receives the AOG event, delegates analysis to specialist agents, consolidates findings, and drives the final recommendation to the human decision-maker.
+
 Responsibilities:
 - Orchestration
 - Planning
@@ -100,24 +102,32 @@ Responsibilities:
 - Coordination across specialist agents
 
 ## Maintenance Agent
+The Maintenance Agent assesses aircraft repairability and technical feasibility. It evaluates whether the aircraft can be recovered through repair and estimates practical maintenance constraints.
+
 - Repair analysis
 - Work package feasibility
 - Maintenance turnaround estimation
 - Technical recovery assessment
 
 ## Inventory Agent
+The Inventory Agent supports maintenance-driven part validation. It checks whether the required material is available and whether alternate sourcing is feasible.
+
 - Inventory analysis
 - Part availability validation
 - Alternate part sourcing evaluation
 - Material readiness assessment
 
 ## Operations Agent
+The Operations Agent evaluates the larger business impact of the AOG event, including schedule and substitution implications. It assesses how the recovery path affects operations and customer impact.
+
 - Flight impact analysis
 - Swap recommendation evaluation
 - Schedule disruption analysis
 - Operational prioritization
 
 ## Report Creation Agent
+The Report Creation Agent consolidates the output from the other agents and prepares a final recommendation package for human review.
+
 - Consolidates findings from other agents
 - Produces the ranked recovery recommendation
 - Highlights trade-offs, assumptions, and risks
@@ -129,21 +139,43 @@ Responsibilities:
 
 ```mermaid
 flowchart TB
-User[Controller]
-User --> RC[Recovery Coordinator]
-RC --> MA[Maintenance Agent]
-RC --> IA[Inventory Agent]
-RC --> OA[Operations Agent]
-RC --> RA[Report Creation Agent]
-MA --> RC
-IA --> RC
-OA --> RC
-RA --> RC
-RC --> Decision[Recommended Recovery Plan]
-Decision --> Human[Human Approval]
+    User[User / Trigger Event] --> Validation[Input Prompt Validation]
+    Validation --> Controller[Controller Agent]
+    Controller --> Context[Context Engineering + Retrieval]
+    Context --> LLM[LLM Reasoning Layer]
+
+    Controller --> Maintenance[Maintenance Agent]
+    Controller --> Operations[Operations Agent]
+    Controller --> Report[Report Creation Agent]
+
+    Maintenance --> Inventory[Inventory Agent]
+    Inventory --> Maintenance
+
+    Maintenance --> MCPM[MCP / Tool Layer]
+    Inventory --> MCPI[MCP / Tool Layer]
+    Operations --> MCPO[MCP / Tool Layer]
+    Report --> MCPR[MCP / Tool Layer]
+
+    MCPM --> MAPI[Maintenance APIs / Systems]
+    MCPI --> IAPI[Inventory APIs / Systems]
+    MCPO --> OAPI[Flight Ops APIs / Systems]
+    MCPR --> RAPI[Recommendation / Reporting Layer]
+
+    LLM --> AgentOut[Structured Agent Output]
+    AgentOut --> Eval[Output Evaluation + Guardrails]
+    Eval --> Human[Human Approval]
+    Human --> Final[Final Report]
 ```
 
-This diagram reflects the scoped architecture in the image: the Controller Agent coordinates the flow, Maintenance and Inventory assess the technical feasibility, Operations evaluates business impact, and the Report Creation Agent prepares the final recommendation for the human decision-maker.
+This architecture extends the Solution Overview by showing how the system gathers and validates inputs before orchestration. The validated prompt enters the Controller Agent, which enriches it with contextual memory, retrieved data, and tool-access instructions. The LLM then reasons over the structured context and calls MCP-enabled tools to interact with maintenance, inventory, and operations systems.
+
+Key design elements:
+- Input prompt validation: checks for missing fields, invalid request structure, safety constraints, and incomplete AOG event data before agent execution.
+- Context engineering: combines retrieved state, prior conversation history, domain instructions, and structured constraints to improve decision quality.
+- MCP and API interaction: specialist agents call approved tools and external APIs through an MCP/tool layer to fetch live operational data without bypassing governance.
+- LLM interaction: the model reasons over validated context and tool outputs to generate a ranked recovery recommendation.
+- Output evaluation: the final response is evaluated for consistency, completeness, groundedness, and safety before it is presented to the human operator.
+- Optimization techniques: prompt templating, retrieval grounding, role-specific instructions, structured output schemas, tool result summarization, and evaluation-based validation help improve reliability and reduce hallucination risk.
 
 ---
 
@@ -152,11 +184,13 @@ This diagram reflects the scoped architecture in the image: the Controller Agent
 ```mermaid
 sequenceDiagram
 User->>Controller: Analyze AOG Event
-Controller->>Maintenance: Assess aircraft condition
-Controller->>Inventory: Check part availability
-Controller->>Operations: Analyze flight impact
-Controller->>Report: Prepare recommendation
-Controller-->>User: Ranked recovery options
+Controller->>Maintenance: Assess aircraft repairability
+Maintenance->>Inventory: Validate part availability
+Inventory-->>Maintenance: Part feasibility result
+Controller->>Operations: Evaluate schedule and operational impact
+Controller->>Report: Consolidate findings and prepare recommendation
+Report-->>User: Final recovery recommendation
+User->>Controller: Human review and approval
 ```
 
 ---
