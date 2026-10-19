@@ -436,6 +436,29 @@ Mitigation: Policy verification.
 Mitigation: Retries and fallbacks.
 
 ---
+# 12A. Backout and Contingency Plan
+
+This section outlines the strategy for returning to a known stable state if the AOG Recovery Coordinator release fails in production.
+
+**12A.1. Backout Strategy**
+
+*   **Objective:** To safely disable the new agent-based workflow and revert to the prior manual process without data loss or operational disruption.
+*   **Trigger Conditions:** The backout plan will be initiated if one or more of the following occurs post-deployment:
+    *   Critical agent failure (e.g., Controller Agent crashes, recommendation engine fails to produce output).
+    *   Data integrity issues are detected in the final reports.
+    *   System performance degrades below the acceptable threshold (e.g., >5 minute response time for a recommendation).
+*   **Procedure:**
+    1.  **Disable Agent Routing:** The primary routing rule that forwards AOG events to the Controller Agent will be disabled. All new AOG events will revert to the manual assignment queue in the Air Operations Workbench.
+    2.  **Archive In-Flight Events:** Any AOG events currently being processed by the agent will be flagged as "Manual Intervention Required" and returned to the operations team for manual handling.
+    3.  **Notify Stakeholders:** An automated alert will be sent to the Air Operations control team and the development team, notifying them that the AOG agent has been taken offline and all recovery analyses will proceed manually.
+
+**12A.2. Contingency Plan**
+
+If a backout is not immediately feasible (e.g., a partial failure where some recommendations are still viable), the system will operate in a degraded state with the following contingencies:
+*   **Reduced Confidence Flagging:** The system will automatically append a "LOW CONFIDENCE - MANUAL VALIDATION REQUIRED" warning to all recommendations.
+*   **Human-in-the-Loop Escalation:** All recommendations, regardless of confidence score, will be automatically escalated for mandatory human review.
+
+---
 # 13. Human-in-the-Loop Governance
 
 ```text
