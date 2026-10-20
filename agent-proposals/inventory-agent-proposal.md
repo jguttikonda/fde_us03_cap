@@ -6,10 +6,16 @@ This document is a detailed draft for the Inventory Agent and supplements the ro
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Inventory Agent determines whether the required parts and material are available to support the AOG recovery plan and whether alternate sourcing is realistic.
+The Inventory Agent is a sub-agent of the Maintenance Agent. It determines whether required parts and material are available, evaluates realistic alternate sourcing, and returns parts-readiness information to Maintenance so it can establish the aircraft's return-to-service ETA.
 
 ## 2. Role in the System
-This agent supports the maintenance path by validating physical and logistical availability. It determines not just whether a part exists, but whether it can be obtained in time and with acceptable material risk.
+Maintenance calls the Inventory Agent to validate physical and logistical availability for the active AOG case. The Inventory Agent answers Maintenance only; it does not communicate directly with the Controller or Operations Agent.
+
+## 2A. Handshake with Other Agents
+Agent type:    sub-agent of Maintenance
+Called by:     Maintenance (H3)
+Calls:         none (reads inventory and supplier data through its tools)
+Returns to:    Maintenance (H4)
 
 ## 3. Primary Responsibilities
 - Part availability checking
@@ -92,7 +98,7 @@ Return only a structured output with:
 ```text
 You are the Inventory Agent for an aircraft AOG recovery workflow.
 
-Review the supply recommendation and confirm it aligns with compatibility rules, sourcing constraints, and the output contract expected by the Controller.
+Review the supply recommendation and confirm it aligns with compatibility rules, sourcing constraints, and the output contract expected by Maintenance.
 
 Inputs you must assess:
 - Material recommendation
@@ -122,7 +128,18 @@ Return only a structured output with:
     "alternate": "Alternate or backup option",
     "transfer_required": true
   },
+  "stock_per_station": [
+    {
+      "station": "MIA",
+      "available_quantity": 0
+    }
+  ],
+  "transfer_hours": 0,
+  "alternates": ["P/N-2047A"],
+  "supplier_lead_time_hours": 0,
+  "parts_ready_eta": "ISO-8601 timestamp or stated time window",
   "lead_time_hours": 0,
+  "confidence": 0.0,
   "risk_factors": [
     "Risk 1",
     "Risk 2"
@@ -305,17 +322,17 @@ These are the outputs the LLM should produce as reasoning and recommendation art
 - Recommended sourcing path under urgency constraints
 
 ## 13. Tool / External System Outputs
-This is the downstream execution handshake: the structured result generated after the recommendation is accepted and translated into machine-usable artifacts for the Controller, procurement system, or operational workflow.
+This is the downstream handoff to Maintenance: the structured result generated after the recommendation is accepted and translated into machine-usable material-readiness information.
 - Material readiness status payload
 - Procurement or transfer task recommendation
 - Supplier escalation record if necessary
 - Risk flag for missing or uncertain inventory data
-- Decision summary passed to the Controller and Maintenance Agent
+- Decision summary, including parts-ready ETA and confidence, returned to Maintenance
 
 ### Handshake Chain
-Tool / External System Inputs (10) -> LLM-Facing Inputs (9) -> LLM-Facing Outputs (11) -> Tool / External System Outputs (12)
+Maintenance (H3) -> Inventory Agent -> Maintenance (H4)
 
-This sequence ensures the model reasons from verified inventory evidence and that every downstream action remains traceable to the same case context.
+The Inventory Agent reasons from verified inventory evidence and returns its material-readiness results to Maintenance; Maintenance combines the parts-ready ETA with repair duration.
 
 ## 13. Validation and Output Evaluation
 The Inventory Agent should confirm:

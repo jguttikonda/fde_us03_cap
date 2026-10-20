@@ -9,6 +9,7 @@ Every proposal must include the following sections in order:
 
 1. Purpose
 2. Role in the System
+2A. Handshake with Other Agents
 3. Primary Responsibilities
 4. Non-Deterministic Responsibilities
 5. Context Engineering and Memory Management
@@ -36,6 +37,12 @@ Describe the specific objective of the agent.
 
 ## 2. Role in the System
 Explain where the agent sits in the overall workflow and how it contributes to the recovery process.
+
+## 2A. Handshake with Other Agents
+- Agent type: [top-level agent or sub-agent]
+- Called by: [calling agent(s) and handshake ID(s), or None]
+- Calls: [called agent(s) and handshake ID(s), or None]
+- Payload in and out: [what this agent receives and returns, with handshake ID(s)]
 
 ## 3. Primary Responsibilities
 List the domain-specific responsibilities of the agent.

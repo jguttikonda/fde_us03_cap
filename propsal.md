@@ -159,7 +159,6 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 
 ### 6.5 Deterministic Responsibilities
 - Validate required maintenance data and aircraft status fields
-- Check work-order completeness and maintenance readiness conditions
 - Detect obvious schedule conflicts or missing required actions
 - Apply standard safety and approval checks
 - Structure repair options into clear technical categories
@@ -277,7 +276,7 @@ Controller responsibilities:
 - Aggregate intermediate outputs
 - Generate final report for human approval
 
-## 7.2 Maintenance Agent Architecture
+## 7.2 Maintenance Agent Architecture (with Inventory Sub-Agent)
 
 ```mermaid
 flowchart LR
@@ -286,16 +285,31 @@ flowchart LR
     MCtx --> MMem[Maintenance Memory]
     MMem --> MLLM[Maintenance LLM Reasoning]
     MLLM --> MTools[MCP / Maintenance Tools]
-    MTools --> APIs[Maintenance Systems / Work Order APIs]
-    APIs --> MLLM
+    MTools --> MAPIs[Maintenance Systems / Work Order APIs]
+    MAPIs --> MLLM
+    MLLM -->|Parts request| ValidateI[Inventory Input Validation]
+    subgraph InvSub[Inventory Sub-Agent]
+        ValidateI --> IMem[Inventory Memory]
+        IMem --> ILLM[Inventory LLM Reasoning]
+        ILLM --> ITools[MCP / Inventory Tools]
+        ITools --> IAPIs[Inventory / Parts Systems]
+        IAPIs --> ILLM
+        ILLM --> EvalI[Output Evaluation + Guardrails]
+    end
+    EvalI -->|Part availability| MLLM
     MLLM --> EvalM[Output Evaluation + Guardrails]
-    EvalM --> MOut[Repair Feasibility Output]
+    EvalM --> MOut[ETA + Risk Metrics Output]
     MOut --> Controller[Controller Agent]
 ```
 
-The Maintenance Agent focuses on technical feasibility. It validates incoming maintenance context, uses local memory and tool access to assess repairability, and evaluates its output before sending the result back to the Controller.
+The Inventory Agent is a sub-agent of the Maintenance Agent, so the two are described together. Maintenance owns the technical feasibility assessment and the final output (ETA and risk metrics) returned to the Controller. Inventory owns part availability and alternate sourcing, and runs only when Maintenance calls it.
 
-Maintenance-specific elements:
+Handover between the two:
+- Maintenance passes the required parts and repair context to Inventory
+- Inventory returns part availability and sourcing options to Maintenance
+- Maintenance combines them into the ETA and risk metrics and sends that to the Controller
+
+### Maintenance-specific elements
 - Repairability assessment
 - Maintenance history and work-order context
 - Local domain memory for aircraft condition and constraints
@@ -303,25 +317,10 @@ Maintenance-specific elements:
 - Output evaluation before handoff
 - Tools for work-order and technical systems
 
-## 7.3 Inventory Agent Architecture
+### Inventory sub-agent elements
 
-```mermaid
-flowchart LR
-    SharedCtx[Shared Coordination Context] --> ValidateI[Input Validation]
-    ValidateI --> ICtx[Inventory Context Engineering]
-    ICtx --> IMem[Inventory Memory]
-    IMem --> ILLM[Inventory LLM Reasoning]
-    ILLM --> ITools[MCP / Inventory Tools]
-    ITools --> APIs[Inventory / Parts Systems]
-    APIs --> ILLM
-    ILLM --> EvalI[Output Evaluation + Guardrails]
-    EvalI --> IOut[Part Availability Output]
-    IOut --> Controller[Controller Agent]
-```
+The Inventory sub-agent focuses on material readiness. It validates incoming requests, checks part availability and alternate sourcing, and evaluates its output before returning the result to Maintenance.
 
-The Inventory Agent focuses on material readiness. It validates incoming requests, checks part availability and alternate sourcing, and evaluates its output before returning the result to the Controller.
-
-Inventory-specific elements:
 - Stock and location context
 - Supplier and alternate sourcing data
 - Material readiness and substitution logic
@@ -329,7 +328,7 @@ Inventory-specific elements:
 - Output evaluation before handoff
 - Tool access to inventory APIs and catalogs
 
-## 7.4 Operations Agent Architecture
+## 7.3 Operations Agent Architecture
 
 ```mermaid
 flowchart LR
@@ -414,7 +413,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 9. Tool & API Mapping
+# 9. Tool & API Mapping (OPTIONAL / GOOD TO HAVE)
 
 | Agent | Functional Focus |
 |---------|------------------|
@@ -424,7 +423,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 10. Security Guardrails
+# 10. Security Guardrails (OPTIONAL / GOOD TO HAVE)
 
 - Read-only access where possible
 - Role-based access control
@@ -435,7 +434,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 11. Safety Controls
+# 11. Safety Controls (OPTIONAL / GOOD TO HAVE)
 
 - Advisory only
 - Human approval required
@@ -445,7 +444,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 12. Human-in-the-Loop Governance
+# 12. Human-in-the-Loop Governance (OPTIONAL / GOOD TO HAVE)
 
 ```text
 AI Recommendation
@@ -461,7 +460,7 @@ This ensures the platform supports decision-making without bypassing accountabil
 
 ---
 
-# 13. Expected Business Impact
+# 13. Expected Business Impact (OPTIONAL / GOOD TO HAVE)
 
 The solution is intended to help air operations teams act faster when time-sensitive recovery decisions are needed. It brings together technical feasibility, material readiness, and operational disruption into a single coordinated decision flow.
 
