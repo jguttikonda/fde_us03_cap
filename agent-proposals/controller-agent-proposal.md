@@ -22,6 +22,7 @@ The Controller Agent is not a domain specialist. It is the workflow director tha
 - Shared context management
 - Coordination across the maintenance, inventory, and operations branches
 - Final recommendation synthesis
+- Deterministic final report assembly (ranking, templating, confidence labelling) using fixed rules, see Section 9C
 - Human handoff and escalation logic
 
 ## 4. Non-Deterministic Responsibilities
@@ -102,10 +103,12 @@ Review the recommended recovery path and ensure it is suitable for human approva
 
 Inputs you must assess:
 - Final recommendation
+- Ranked options produced by the deterministic report builder (Section 9C)
 - Approval and governance constraints
 - Known assumptions and unresolved risks
 
 Decision rules:
+- Do not change the ranking produced by the deterministic report builder; only explain it
 - Ensure the recommendation is traceable and reviewable
 - Keep the final message concise and decision-ready
 - Normalize the output into the standard controller format
@@ -128,6 +131,17 @@ Return only a structured output with:
     "Finding 1",
     "Finding 2"
   ],
+  "ranked_options": [
+    {
+      "rank": 1,
+      "option": "repair|substitute|transfer|delay|escalate",
+      "return_to_service_hours": 0.0,
+      "affected_flights": ["Flight 1"],
+      "affected_packages": {"total": 0, "priority": 0},
+      "risk_metrics": ["Metric 1"],
+      "trade_off": "One sentence built from the fields above"
+    }
+  ],
   "recommended_recovery_path": {
     "option": "repair|substitute|transfer|delay|escalate",
     "confidence": 0.0,
@@ -146,6 +160,10 @@ Return only a structured output with:
 - Apply workflow routing rules
 - Enforce escalation thresholds and approval gates
 - Standardize output schema and final summary structure
+- Check that the Maintenance output (ETA and risk metrics) and the Operations output are both present before a report is built
+- Rank the recovery options with a written, fixed scoring rule (Section 9C)
+- Apply the final report template: option, time back in service, affected flights and packages, risk metrics, trade-off, assumptions, confidence label
+- Assign status categories (feasible, high-risk, deferred) and apply the confidence thresholds in Section 9A
 
 ## 9A. Confidence Thresholds and Escalation Rules
 The Controller Agent is responsible for translating specialist findings into a final decision posture. It must stop the workflow from auto-approving low-confidence recommendations.
@@ -166,6 +184,33 @@ When one of the specialist agents cannot complete its analysis, the Controller s
 - Missing required inputs: do not assume a route; return the case to the human approver with the missing-data list
 
 The Controller should always preserve a traceable explanation of what was missing, what was substituted, and what remains uncertain.
+
+## 9C. Deterministic Final Report Assembly
+The Controller builds the final recovery recommendation report itself. There is no separate Report Creation Agent. Assembly is rule-based and repeatable: the same inputs always produce the same ranked report.
+
+Steps:
+1. Completeness check: the Maintenance output (return-to-service ETA, risk metrics, confidence) and the Operations output (affected flights, affected packages when provided, swap options) must both be present. If one is missing, apply Section 9B and mark the report provisional.
+2. Build the options: for each recovery option (Repair Now, Transfer Part, Swap Aircraft, Delay Flight) collect time back in service, affected flights, affected packages, risk metrics and confidence.
+3. Rank with a fixed rule. Default rule: fewest affected flights first, then fastest return to service, then fewest priority packages at risk. If two options are within 2% of each other on the ranking measure, present both with their trade-offs and require the human to choose. The rule is a team decision and is changed here only.
+4. Label: assign a status (feasible, high-risk, deferred) and a confidence label using the thresholds in Section 9A.
+5. Fill the report template (below). Every sentence comes from template fields; the Controller LLM explains the result but does not re-rank it.
+6. Approval gate: the report is advisory only, requires human approval before any action, and is stored with an audit record.
+
+Report template:
+```text
+Recovery options for <aircraft_id> (<event_id>)
+
+<rank>. <option>   (RECOMMENDED on rank 1)
+   - Back in service: <time> (about <hours> hours)
+   - Affected flights: <list or none>
+   - Affected packages: <total / priority, when provided by Operations>
+   - Risk metrics: <from Maintenance>
+   - Trade-off: <sentence built from the fields above>
+
+Assumptions: <list>
+Confidence: <label>    Status: <feasible|high-risk|deferred>
+Advisory only. Human approval is required before any action.
+```
 
 ### 8.1 MCP Configuration for Deterministic Validation
 The Controller Agent relies on a narrow MCP tool layer to carry out the deterministic checks that must happen before reasoning begins. These tools are configured as reusable validation adapters and are not used to replace domain judgment.
@@ -330,14 +375,14 @@ This is the upstream evidence handshake: the structured inputs the agent receive
 These are the outputs the LLM should produce as final reasoning and recommendation artifacts after evaluating the assembled case evidence:
 - Routing plan for the active AOG case
 - Consolidated interpretation of specialist outputs
-- Ranked recovery options with confidence and rationale
-- Final recommendation package for human approval
+- Plain-language explanation of the ranked options and the recommended path, based on the fields of the deterministic report (Section 9C)
 - Flags for ambiguity, risk, and required escalation
 
 ## 13. Tool / External System Outputs
 This is the downstream execution handshake: the structured system artifacts generated after the accepted recommendation is converted into machine-usable control-plane actions.
 - Structured case status updates
 - Coordinator summary payload passed to downstream services
+- Ranked recommendation report produced by the deterministic ranking rule and template (Section 9C)
 - Human review package or decision brief
 - Approval workflow trigger and escalation actions
 - Audit record of reasoning, data sources, and final recommendation
@@ -368,7 +413,8 @@ The Controller Agent is successful when it:
 - preserves shared context across agents
 - brings together the right domain outputs
 - produces a recommendation that is explainable and reviewable
+- assembles a complete, repeatable, rule-based ranked report without a separate report agent
 - supports human approval rather than bypassing it
 
 ## 16. Draft Notes
-This agent is the coordination layer, not the technical decision-maker. Its core value is structured orchestration, effective synthesis, and clear reporting.
+This agent is the coordination layer, not the technical decision-maker. Its core value is structured orchestration and clear, rule-based reporting: the final ranked report is assembled deterministically by the Controller (Section 9C), not by a separate Report Creation Agent.
