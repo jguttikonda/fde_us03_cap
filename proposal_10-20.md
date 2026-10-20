@@ -380,7 +380,7 @@ User->>Controller: Analyze AOG Event
 Controller->>Maintenance: Assess aircraft
 Maintenance->>Inventory: Check part availability
 Inventory-->>Maintenance: Availability + confidence
-Maintenance-    ->>Controller: Feasibility + confidence
+Maintenance-->>Controller: Feasibility + confidence
 Controller->>Operations: Analyze impact
 Operations-->>Controller: Impact + confidence
 Controller->>Recommendation: Score and rank options
