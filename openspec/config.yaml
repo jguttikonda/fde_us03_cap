@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  docs/architecture-requirements.md is the authoritative engineering baseline.
+  OpenSpec artifacts must comply with its normative requirements and cite the
+  applicable ARD requirement IDs. The system uses Python, Pydantic, Google ADK,
+  typed tool adapters, deterministic local or mock enterprise integrations,
+  and Controller-led multi-agent coordination. It is advisory-only: every
+  operational decision requires human approval, and no agent may execute an
+  operational action. Missing, stale, conflicting, or unavailable evidence
+  must remain visible and affect confidence or escalation.
+
+rules:
+  proposal:
+    - Cite every applicable ARD requirement ID from docs/architecture-requirements.md.
+    - Include an "ARD Traceability" section listing addressed, deferred, and out-of-scope requirement IDs with rationale.
+    - Include a "Rubric and Capability Coverage" section mapping applicable capstone rubric checkboxes and proposal capabilities to frameworks, retained evidence, verification, and human responsibilities.
+    - Identify any requested ARD deviation explicitly; never silently weaken or contradict the ARD.
+    - Preserve the advisory-only boundary and mandatory human approval.
+  design:
+    - Explain how the design satisfies each applicable ARD requirement ID.
+    - Document component boundaries, typed contracts, deterministic controls, failure behavior, audit events, and human-approval enforcement.
+    - Record architecture trade-offs and any ARD deviation with impact and mitigation.
+  specs:
+    - Cite applicable ARD requirement IDs in requirements or scenarios.
+    - Provide testable scenarios for normal, partial-data, failure, conflict, low-confidence, escalation, and human-approval behavior when applicable.
+    - Do not introduce success-shaped fallbacks or automatic operational actions.
+  tasks:
+    - Cite the OpenSpec requirement or ARD requirement implemented or verified by each task.
+    - Include implementation, focused tests, and traceability updates in the same capability scope.
+    - Add explicit verification tasks for deterministic rules, degraded behavior, security boundaries, auditability, and the human gate when applicable.
+    - Add evidence tasks for applicable RAPID controls, AI-assisted development practice, and sponsor demonstration requirements; do not represent framework installation as evidence of behavior.
+
+operations:
+  apply:
+    guidance:
+      - Treat docs/architecture-requirements.md as a required implementation constraint.
+      - Preserve ARD traceability in code, tests, and generated evidence.
+      - Stop and surface a conflict rather than implementing behavior that contradicts the ARD.
+  archive:
+    guidance:
+      - Confirm applicable ARD requirements have verification evidence or documented deferrals.
+      - Summarize ARD coverage and unresolved deviations before archiving.
