@@ -18,38 +18,100 @@ This agent focuses on the technical feasibility of repair. It assesses the condi
 - Identify technical dependencies and constraints
 - Recommend repair versus defer or escalate
 
-## 4. LLM Role
+## 4. Non-Deterministic Responsibilities
+- Interpret partial or ambiguous maintenance history
+- Assess how uncertainty changes the repair recommendation
+- Estimate turnaround based on incomplete operational realities
+- Weigh technical feasibility against urgency and schedule pressure
+- Recommend whether to repair, reroute, substitute, or escalate
+
+## 5. Context Engineering and Memory Management
+The Maintenance Agent maintains a technical case memory focused on the active aircraft defect, maintenance state, work-order completeness, safety constraints, and repairability assumptions. It keeps the current evidence window compact and avoids long-term retention of noisy inspection records unless they directly affect the current recovery decision.
+
+- Short-term memory: current aircraft condition, active defect summary, safety gate state, and work-order status
+- Working memory: the technical findings, assumptions, and dependencies currently under consideration for repair feasibility
+- Durable local memory: recurring maintenance patterns, standard rule exceptions, and known repair categories for similar defects
+- Context compression rule: retain only the maintenance facts that materially affect the repair recommendation and downstream approvals
+
+## 6. LLM Role
 The Maintenance LLM acts as the technical feasibility analyst. It reads maintenance context, work orders, inspections, and engineering notes to reason about the most plausible repair path.
 
-## 5. LLM Prompt Template
+## 7. LLM Prompt Template
+This agent should use a short sequence of prompt interactions instead of a single broad technical prompt. The split keeps fact extraction, reasoning, and final validation separate, which improves traceability and reduces context drift.
+
+### 7.1 Prompt A — Maintenance Evidence Grounding
 ```text
 You are the Maintenance Agent for an aircraft AOG recovery workflow.
 
-Your job is to assess whether the aircraft can be repaired and determine the practical maintenance path required for recovery.
+Your task is to extract only the fact-backed maintenance evidence relevant to the current defect and repair decision.
 
 Inputs you must assess:
 - Aircraft defect summary
-- Maintenance records and prior inspections
-- Work orders and repair tasks
-- Part dependencies required for repair
-- Technical constraints and assumptions
+- Maintenance history and inspection data
+- Work-order status and task details
+- Known dependencies and technical constraints
 
 Decision rules:
-- Evaluate the technical feasibility of repair.
-- Identify required maintenance actions and dependencies.
-- Highlight uncertainty, risks, and constraints.
-- Recommend one of the following outcomes: repair, defer, escalate, or uncertain.
-- State the confidence level and assumptions behind the decision.
+- Keep only facts that materially affect repairability
+- Flag missing fields, stale records, or contradictory maintenance notes
+- Do not infer technical feasibility without supporting evidence
 
-Return only a structured technical recommendation with:
-1. repairability status
-2. required actions
-3. estimated downtime
-4. technical risk and assumptions
-5. final recommendation
+Return only a structured output with:
+1. evidence_summary
+2. missing_data
+3. assumptions
+4. confidence_level
 ```
 
-## 6. Expected Output Standard Format
+### 7.2 Prompt B — Technical Repair Reasoning
+```text
+You are the Maintenance Agent for an aircraft AOG recovery workflow.
+
+Use the grounded evidence from Prompt A to assess repair feasibility and determine the likely maintenance path.
+
+Inputs you must assess:
+- Relevant aircraft condition facts
+- Maintenance records and defect history
+- Work-order completeness and technical constraints
+- Part dependency requirements
+
+Decision rules:
+- Determine whether repair is feasible, uncertain, or not feasible
+- Identify the maintenance actions and dependencies required
+- Highlight risk and technical constraints clearly
+
+Return only a structured output with:
+1. repairability_status
+2. required_actions
+3. estimated_ground_time_hours
+4. technical_risks
+5. confidence
+```
+
+### 7.3 Prompt C — Final Validation and Output Normalization
+```text
+You are the Maintenance Agent for an aircraft AOG recovery workflow.
+
+Review the repair recommendation and ensure it is consistent with safety constraints, procedure rules, and the agent’s domain boundaries.
+
+Inputs you must assess:
+- Repairability recommendation
+- Safety gate state
+- Required approvals and dependencies
+
+Decision rules:
+- Reject unsupported technical conclusions
+- Ensure the output is traceable and ready for downstream use
+- Normalize the result into the standard maintenance contract format
+
+Return only a structured output with:
+1. final_summary
+2. final_recommendation
+3. required_approvals
+4. approval_status
+```
+
+## 8. Expected Output Standard Format
 ```json
 {
   "agent_name": "Maintenance Agent",
@@ -77,51 +139,182 @@ Return only a structured technical recommendation with:
 }
 ```
 
-## 7. Deterministic Responsibilities
+## 9. Deterministic Responsibilities
 - Validate aircraft condition metadata and work-order completeness
 - Check required maintenance actions against standard procedures
 - Detect missing fields, incomplete records, or obvious data inconsistencies
 - Apply safety and approval gates
 - Map technical findings into structured repair categories
 
-## 8. Non-Deterministic Responsibilities
-- Interpret partial or ambiguous maintenance history
-- Assess how uncertainty changes the repair recommendation
-- Estimate turnaround based on incomplete operational realities
-- Weigh technical feasibility against urgency and schedule pressure
-- Recommend whether to repair, reroute, substitute, or escalate
+### 8.1 MCP Configuration for Deterministic Validation
+This agent uses MCP-hosted tools to perform the validation steps that are deterministic and repeatable. The purpose is to ensure the LLM only reasons over complete and trustworthy technical inputs.
 
-## 9. LLM-Facing Inputs
-These are the inputs the LLM should reason over to assess technical repairability:
+- `validate_aircraft_metadata`: checks aircraft identity, defect status, and required maintenance context before analysis
+- `validate_workorder_completeness`: verifies task records, required fields, and work-order linkage are present
+- `check_standard_maintenance_rules`: applies maintenance procedure checks and rule-based repair mapping
+- `check_safety_gate`: validates whether the technical path is compliant with configured safety restrictions and approval conditions
+- `map_repair_category`: converts the technical findings into a standard repair classification used by downstream agents
+
+### 8.2 Domain APIs Reached through MCP Tools
+The deterministic validation layer calls the domain APIs that own the source technical facts:
+
+- Aircraft Maintenance API: returns defect history, aircraft status, and technical metadata
+- Work Order / Task API: returns repair tasks, work-order completeness, and required maintenance actions
+- Engineering Rules API: provides standard procedures, maintenance constraints, and repair classification logic
+- Safety / Approval API: enforces gate checks and returns compliance or exception states
+- Part Dependency API: verifies which components and spare dependencies are required for the proposed repair path
+
+### 8.3 Tool Interaction Contract (JSON)
+Each tool call captures the exact request/response contract that feeds the deterministic repairability validation layer.
+
+#### 8.3.1 `validate_aircraft_metadata`
+Request JSON:
+```json
+{
+  "aircraft_tail_number": "N123AB",
+  "required_fields": ["aircraft_id", "status", "defect_summary", "maintenance_history"],
+  "include_history": true
+}
+```
+
+Response JSON:
+```json
+{
+  "status": "validated",
+  "aircraft_id": "N123AB",
+  "current_status": "AOG",
+  "missing_fields": [],
+  "defect_summary": "Hydraulic leak",
+  "maintenance_history_count": 7
+}
+```
+
+#### 8.3.2 `validate_workorder_completeness`
+Request JSON:
+```json
+{
+  "aircraft_id": "N123AB",
+  "work_order_id": "WO-44019",
+  "required_sections": ["task_list", "part_dependencies", "inspection_notes"]
+}
+```
+
+Response JSON:
+```json
+{
+  "work_order_status": "complete",
+  "missing_sections": [],
+  "part_dependencies": ["hydraulic_pump", "seal_kit"],
+  "inspection_notes_present": true
+}
+```
+
+#### 8.3.3 `check_standard_maintenance_rules`
+Request JSON:
+```json
+{
+  "aircraft_type": "A320",
+  "defect_code": "HYD-LEAK",
+  "maintenance_context": {
+    "station": "MIA",
+    "mro_capability": "line-maintenance"
+  }
+}
+```
+
+Response JSON:
+```json
+{
+  "rule_check": "passed",
+  "repair_category": "line_repair_supported",
+  "required_approvals": ["engineering_approval"],
+  "warnings": []
+}
+```
+
+#### 8.3.4 `check_safety_gate`
+Request JSON:
+```json
+{
+  "aircraft_id": "N123AB",
+  "defect_code": "HYD-LEAK",
+  "repair_plan": {
+    "action": "replace_hydraulic_pump",
+    "station": "MIA"
+  },
+  "safety_constraints": ["engineering_approval", "aircraft_grounding_check"]
+}
+```
+
+Response JSON:
+```json
+{
+  "safety_gate": "passed",
+  "approval_required": true,
+  "exceptions": [],
+  "compliance_status": "ready_for_technical_review"
+}
+```
+
+#### 8.3.5 `map_repair_category`
+Request JSON:
+```json
+{
+  "repair_findings": [
+    "hydraulic_pump_failure",
+    "seal_kit_required"
+  ],
+  "aircraft_type": "A320",
+  "station_capability": "line-maintenance"
+}
+```
+
+Response JSON:
+```json
+{
+  "repair_category": "line_repair_supported",
+  "ground_time_hours": 8,
+  "category_reason": "defect is within line-maintenance capability and replacement parts are available",
+  "classification_confidence": 0.91
+}
+```
+
+## 10. LLM-Facing Inputs
+These are the curated, validated facts the LLM should reason over to assess technical repairability. This is the cleaned evidence set produced by the deterministic checks and not a raw maintenance dump.
 - Aircraft defect summary and current technical status
 - Maintenance history and prior inspections
 - Work-order context and repair constraints
 - Part dependency information relevant to the repair
 - Technical notes, assumptions, and uncertainty in the aircraft record
 
-## 10. Tool / External System Inputs
-These are the structured system inputs consumed by the agent:
+## 11. Tool / External System Inputs
+This is the upstream evidence handshake: the structured system inputs consumed by the agent before the model reasons.
 - Aircraft maintenance records and defect logs
 - Work-order and task management systems
 - Engineering and inspection APIs
 - Parts dependency metadata from maintenance systems
 - Safety and approval rule sources used for validation
 
-## 11. LLM-Facing Outputs
-These are the outputs the LLM should produce as reasoning and recommendation artifacts:
+## 12. LLM-Facing Outputs
+These are the outputs the LLM should produce as reasoning and recommendation artifacts after evaluating the validated evidence:
 - Repair feasibility assessment
 - Estimated grounded time and technical downtime range
 - Required maintenance actions and dependencies
 - Technical risk and constraint summary
 - Recommendation to repair, defer, or escalate
 
-## 12. Tool / External System Outputs
-These are the downstream system artifacts generated after reasoning:
+## 13. Tool / External System Outputs
+This is the downstream execution handshake: the structured system artifacts generated after the accepted guidance is converted into machine-usable maintenance actions.
 - Structured maintenance recommendation payload
 - Repair work package summary for operations and planning teams
 - Technical risk flags for downstream systems
 - Escalation or exception record when confidence is low
 - Decision record used by the Controller for final synthesis
+
+### Handshake Chain
+Tool / External System Inputs (10) -> LLM-Facing Inputs (9) -> LLM-Facing Outputs (11) -> Tool / External System Outputs (12)
+
+This flow ensures the technical decision is based on verified aircraft evidence and that the resulting maintenance recommendation is traceable to the same facts.
 
 ## 13. Validation and Output Evaluation
 The Maintenance Agent should validate its output by checking:

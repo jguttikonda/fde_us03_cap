@@ -24,11 +24,11 @@ Each proposal follows the same contract format:
 1. Purpose
 2. Role in the System
 3. Primary Responsibilities
-4. LLM Role
-5. LLM Prompt Template
-6. Expected Output Standard Format
-7. Deterministic Responsibilities
-8. Non-Deterministic Responsibilities
+4. Non-Deterministic Responsibilities
+5. LLM Role
+6. LLM Prompt Template
+7. Expected Output Standard Format
+8. Deterministic Responsibilities
 9. LLM-Facing Inputs
 10. Tool / External System Inputs
 11. LLM-Facing Outputs

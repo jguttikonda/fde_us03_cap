@@ -18,38 +18,100 @@ This agent supports the maintenance path by validating physical and logistical a
 - Material readiness assessment
 - Part substitution recommendation
 
-## 4. LLM Role
+## 4. Non-Deterministic Responsibilities
+- Interpret stale or incomplete inventory data
+- Judge whether alternate parts are operationally acceptable
+- Assess supplier reliability and timing risk under uncertainty
+- Recommend a path when inventory status is incomplete but time-sensitive
+- Balance speed of availability against long-term recovery risk
+
+## 5. Context Engineering and Memory Management
+The Inventory Agent keeps a localized, materials-specific memory of the active AOG case. It retains the current part requirements, validation state, supplier constraints, location assumptions, and live risk signals needed for fast material decisions. It does not carry unrelated fleet or maintenance context into its current reasoning window; instead it maintains only the evidence needed to evaluate availability, lead time, and recovery feasibility.
+
+- Short-term memory: part requirements, available stock snapshots, transfer assumptions, and urgent sourcing constraints
+- Working memory: list of viable source options, substitution outcomes, and risk flags that are currently being evaluated
+- Durable local memory: warehouse rules, known supplier behaviors, and recurring part-compatibility patterns for this domain
+- Context compression rule: keep only the part-level facts that affect supply availability, risk, and actionable recommendation
+
+## 6. LLM Role
 The Inventory LLM acts as the materials readiness specialist. It interprets inventory data, stock locations, transfer rules, supplier constraints, and likely lead times to assess material readiness.
 
-## 5. LLM Prompt Template
+## 7. LLM Prompt Template
+This agent should use a staged prompt model instead of one large material-readiness prompt. The separation keeps evidence extraction, source evaluation, and final validation distinct and makes the recommendation easier to audit.
+
+### 7.1 Prompt A — Inventory Evidence Grounding
 ```text
 You are the Inventory Agent for an aircraft AOG recovery workflow.
 
-Your task is to assess whether the required part or material can be secured in time to support the aircraft recovery plan.
+Your task is to extract the fact-backed inventory evidence relevant to the current material decision.
 
-Inputs you must consider:
-- Part number and current stock status
+Inputs you must assess:
+- Part number and stock status
 - Location-level availability and transfer constraints
-- Alternate part options and compatibility rules
-- Supplier or station readiness information
-- Expected lead times and procurement constraints
+- Supplier and station readiness data
+- Alternate-part compatibility facts
 
 Decision rules:
-- Validate whether the part is available now or can be sourced quickly.
-- Evaluate alternate part feasibility and risk if primary stock is unavailable.
-- Clearly distinguish between confirmed availability and uncertain supply.
-- Recommend the most realistic material path under time pressure.
-- Include risk, assumptions, and time-to-delivery in the output.
+- Keep only the facts that affect material availability and urgency
+- Flag missing inventory records, stale stock, or conflicting locational data
+- Do not infer supply certainty without evidence
 
-Return only a structured material readiness assessment with:
-1. availability status
-2. sourcing path
-3. lead time estimate
-4. risk and assumptions
-5. final recommendation
+Return only a structured output with:
+1. evidence_summary
+2. missing_data
+3. assumptions
+4. confidence_level
 ```
 
-## 6. Expected Output Standard Format
+### 7.2 Prompt B — Sourcing and Availability Reasoning
+```text
+You are the Inventory Agent for an aircraft AOG recovery workflow.
+
+Use the grounded supply evidence from Prompt A to determine whether the required part can be secured in time and which sourcing path is most realistic.
+
+Inputs you must assess:
+- Part availability and transfer constraints
+- Supplier readiness and lead times
+- Alternate-part compatibility rules
+- Urgency and operational timing pressure
+
+Decision rules:
+- Distinguish confirmed availability from uncertain or theoretical supply
+- Compare primary, alternate, and transfer options clearly
+- Recommend the realistic supply path with risk stated explicitly
+
+Return only a structured output with:
+1. availability_status
+2. sourcing_path
+3. lead_time_hours
+4. risk_factors
+5. confidence
+```
+
+### 7.3 Prompt C — Final Validation and Output Normalization
+```text
+You are the Inventory Agent for an aircraft AOG recovery workflow.
+
+Review the supply recommendation and confirm it aligns with compatibility rules, sourcing constraints, and the output contract expected by the Controller.
+
+Inputs you must assess:
+- Material recommendation
+- Final lead-time and risk profile
+- Upstream inventory and location assumptions
+
+Decision rules:
+- Ensure the output is grounded in evidence and clearly bounded
+- Reject unsupported assumptions or hidden supplier promises
+- Normalize the result into the standard inventory format
+
+Return only a structured output with:
+1. final_summary
+2. final_recommendation
+3. next_action
+4. approval_status
+```
+
+## 8. Expected Output Standard Format
 ```json
 {
   "agent_name": "Inventory Agent",
@@ -78,51 +140,182 @@ Return only a structured material readiness assessment with:
 }
 ```
 
-## 7. Deterministic Responsibilities
+## 9. Deterministic Responsibilities
 - Validate stock counts and part-level metadata
 - Check minimum availability thresholds
 - Apply part substitution and sourcing rules
 - Detect missing inventory or location inconsistencies
 - Calculate expected lead times from structured data
 
-## 8. Non-Deterministic Responsibilities
-- Interpret stale or incomplete inventory data
-- Judge whether alternate parts are operationally acceptable
-- Assess supplier reliability and timing risk under uncertainty
-- Recommend a path when inventory status is incomplete but time-sensitive
-- Balance speed of availability against long-term recovery risk
+### 8.1 MCP Configuration for Deterministic Validation
+The Inventory Agent uses MCP-connected tools to perform deterministic validation of stock and sourcing data before the model interprets anything.
 
-## 9. LLM-Facing Inputs
-These are the inputs the LLM should reason over to evaluate material readiness:
+- `lookup_part_availability`: checks current stock counts, location-level availability, and part status
+- `validate_minimum_thresholds`: compares available inventory against configured minimum service thresholds
+- `apply_substitution_rules`: ensures compatibility rules and alternate-part logic are evaluated deterministically
+- `check_location_consistency`: detects missing inventory records, duplicate locations, or mismatched station data
+- `calculate_lead_time`: computes expected delivery windows from structured stock and transfer data
+
+### 8.2 Domain APIs Reached through MCP Tools
+The Inventory Agent depends on APIs that provide reliable material facts and constraint data:
+
+- Inventory Management API: returns stock quantities, station stock, and current part availability
+- Warehouse / Transfer API: provides transfer records, movement status, and location consistency details
+- Alternate Parts Catalog API: validates substitution options and compatibility metadata
+- Supplier / Procurement API: returns lead times, shipment constraints, and source readiness information
+- Logistics Routing API: helps determine the realistic sourcing path for urgent material fulfillment
+
+### 8.3 Tool Interaction Contract (JSON)
+Each tool call performs a deterministic validation step and returns a structured material fact set that can be safely passed to the LLM.
+
+#### 8.3.1 `lookup_part_availability`
+Request JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "aircraft_type": "A320",
+  "locations": ["MIA", "ATL", "ORD"],
+  "include_transfer_status": true
+}
+```
+
+Response JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "status": "limited",
+  "available_quantity": 1,
+  "locations": [
+    { "location": "MIA", "quantity": 1, "status": "available" },
+    { "location": "ATL", "quantity": 0, "status": "unavailable" }
+  ],
+  "transfer_required": true
+}
+```
+
+#### 8.3.2 `validate_minimum_thresholds`
+Request JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "required_minimum": 2,
+  "available_quantity": 1,
+  "station": "MIA"
+}
+```
+
+Response JSON:
+```json
+{
+  "threshold_check": "failed",
+  "required_minimum": 2,
+  "available_quantity": 1,
+  "gap": 1,
+  "action_required": "source_or_transfer"
+}
+```
+
+#### 8.3.3 `apply_substitution_rules`
+Request JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "aircraft_type": "A320",
+  "alternate_parts": ["P/N-2047A", "P/N-2047B"],
+  "compatibility_rules": ["aircraft_model_match", "spec_match"]
+}
+```
+
+Response JSON:
+```json
+{
+  "substitution_result": {
+    "valid_alternates": ["P/N-2047A"],
+    "invalid_alternates": ["P/N-2047B"],
+    "compatibility_status": "conditionally_valid"
+  }
+}
+```
+
+#### 8.3.4 `check_location_consistency`
+Request JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "locations": ["MIA", "ATL", "ORD"],
+  "validate_duplicates": true,
+  "validate_station_records": true
+}
+```
+
+Response JSON:
+```json
+{
+  "consistency_status": "warning",
+  "duplicate_records": [],
+  "missing_station_records": ["ORD"],
+  "location_quality": "partial"
+}
+```
+
+#### 8.3.5 `calculate_lead_time`
+Request JSON:
+```json
+{
+  "part_number": "P/N-2047",
+  "source_location": "ATL",
+  "destination_location": "MIA",
+  "shipment_mode": "air_freight",
+  "supplier_priority": "preferred"
+}
+```
+
+Response JSON:
+```json
+{
+  "estimated_lead_time_hours": 14,
+  "confidence": 0.82,
+  "source_ready": true,
+  "eta_window": "2026-10-21T06:00:00Z"
+}
+```
+
+## 10. LLM-Facing Inputs
+These are the curated, validated facts the LLM should reason over to evaluate material readiness. This is the evidence set derived from the deterministic tool checks and not a raw system dump.
 - Part number, specification, and usage context
 - Stock quantity, location, and current availability
 - Alternate part mappings and substitution suitability
 - Supplier or station readiness notes and constraints
 - Lead time and transfer assumptions for the shipment path
 
-## 10. Tool / External System Inputs
-These are the structured system inputs consumed by the agent:
+## 11. Tool / External System Inputs
+This is the upstream evidence handshake: the machine-readable inventory and supply facts collected through MCP tools and domain APIs before the model reasons.
 - Inventory and warehouse service data
 - Stock movement and transfer records
 - Supplier and station availability feeds
 - Alternate-part catalog and compatibility metadata
 - Procurement or logistics workflow data
 
-## 11. LLM-Facing Outputs
-These are the outputs the LLM should produce as reasoning and recommendation artifacts:
+## 12. LLM-Facing Outputs
+These are the outputs the LLM should produce as reasoning and recommendation artifacts after it has evaluated the curated data:
 - Part availability status
 - Alternate sourcing recommendation
 - Lead-time estimate and supply risk summary
 - Material readiness verdict
 - Recommended sourcing path under urgency constraints
 
-## 12. Tool / External System Outputs
-These are the downstream system artifacts generated after reasoning:
+## 13. Tool / External System Outputs
+This is the downstream execution handshake: the structured result generated after the recommendation is accepted and translated into machine-usable artifacts for the Controller, procurement system, or operational workflow.
 - Material readiness status payload
 - Procurement or transfer task recommendation
 - Supplier escalation record if necessary
 - Risk flag for missing or uncertain inventory data
 - Decision summary passed to the Controller and Maintenance Agent
+
+### Handshake Chain
+Tool / External System Inputs (10) -> LLM-Facing Inputs (9) -> LLM-Facing Outputs (11) -> Tool / External System Outputs (12)
+
+This sequence ensures the model reasons from verified inventory evidence and that every downstream action remains traceable to the same case context.
 
 ## 13. Validation and Output Evaluation
 The Inventory Agent should confirm:
