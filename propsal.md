@@ -275,6 +275,8 @@ Each agent should be built around the same pattern:
 
 This structure makes each role easier to develop as an LLM-based specialist while keeping the overall system coordinated and explainable.
 
+The final recommendation is synthesized by the Controller and Report Creation agents using the specialist findings from Maintenance, Inventory, and Operations. When confidence is low or domain signals conflict, the system escalates the case for human review rather than auto-approving a decision.
+
 ---
 
 # 7. Individual Agent-Level Architecture
@@ -438,6 +440,35 @@ Controller->>Report: Consolidate findings and prepare recommendation
 Report-->>User: Final recovery recommendation
 User->>Controller: Human review and approval
 ```
+
+---
+
+# 8A. Functional Validation Test Cases and Fallback Scenarios
+
+The merged design adopts the best validation examples from Unit B while preserving Unit A's workflow and governance structure.
+
+## Test Case 1
+- Input: Part available, technician available, no schedule conflict
+- Expected result: Recommendation = Repair Aircraft
+
+## Test Case 2
+- Input: Part not available, alternate aircraft available
+- Expected result: Recommendation = Aircraft Swap
+
+## Test Case 3
+- Input: Inventory API down
+- Expected result: System uses cached data, reduces confidence, and displays a warning in the final recommendation
+
+## Test Case 4
+- Input: Multiple options within 2% of each other
+- Expected result: Both options are presented with trade-offs and human selection is required
+
+## Scenario: Conflicting Data
+- Maintenance estimates 3 hours while Operations indicates 7 hours
+- Controller flags the conflict
+- Final recommendation is marked provisional and routed to human review
+
+These cases ensure the system remains not only architecture-driven, but also testable, explainable, and resilient under real-world ambiguity.
 
 ---
 

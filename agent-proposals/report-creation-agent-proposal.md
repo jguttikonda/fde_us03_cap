@@ -144,6 +144,32 @@ Return only a structured output with:
 - Identify missing or contradictory information
 - Standardize the final output format for approval workflows
 
+## 9A. Weighted Recovery Option Scoring Model
+The Report Creation Agent is the scoring and explanation layer for the final recommendation. It converts specialist findings into a ranked set of viable recovery options.
+
+| Factor | Weight |
+|--------|--------|
+| Recovery Time | 30% |
+| Operational Impact | 25% |
+| Inventory Availability | 20% |
+| Maintenance Feasibility | 15% |
+| Cost Impact | 5% |
+| Risk Level | 5% |
+
+The scoring should be applied to each recovery option using the evidence provided by the specialist agents:
+- Maintenance Agent contributes repairability, downtime, and technical risk
+- Inventory Agent contributes part availability and sourcing speed
+- Operations Agent contributes disruption, schedule impact, and substitution feasibility
+
+The output must include:
+- score breakdown by factor
+- dominant evidence supporting the recommendation
+- assumptions and uncertainty markers
+- alternative options with relative ranking
+- confidence and escalation trigger
+
+This preserves the Unit A architecture while ensuring the final recommendation is explainable and decision-ready.
+
 ### 8.1 MCP Configuration for Deterministic Validation
 The Report Creation Agent uses deterministic MCP tools to verify that every required recommendation input is complete before the model synthesizes the final narrative.
 

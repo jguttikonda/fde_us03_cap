@@ -147,6 +147,26 @@ Return only a structured output with:
 - Enforce escalation thresholds and approval gates
 - Standardize output schema and final summary structure
 
+## 9A. Confidence Thresholds and Escalation Rules
+The Controller Agent is responsible for translating specialist findings into a final decision posture. It must stop the workflow from auto-approving low-confidence recommendations.
+
+- Confidence >= 70%: proceed with the recommended path and present the rationale to the human approver
+- Confidence 50% to 69%: mark the recommendation as provisional and require human review before action
+- Confidence < 50%: escalate for additional data collection or manual override
+- Conflicting inputs across specialists: defer approval, surface the conflict, and require the human decision-maker to adjudicate
+
+This policy ensures the final decision remains explainable, auditable, and operationally safe even when one domain signal is uncertain.
+
+## 9B. Fallback Handling for Partial Agent Failures
+When one of the specialist agents cannot complete its analysis, the Controller should keep the case moving without pretending the result is fully complete.
+
+- Inventory API unavailable: use cached inventory data, reduce confidence, and mark the recommendation as risk-adjusted
+- Operations API timeout: continue with the remaining agents and include a clear warning in the final brief
+- Maintenance and Operations disagree materially: escalate the case because the conflict affects the overall recommendation
+- Missing required inputs: do not assume a route; return the case to the human approver with the missing-data list
+
+The Controller should always preserve a traceable explanation of what was missing, what was substituted, and what remains uncertain.
+
 ### 8.1 MCP Configuration for Deterministic Validation
 The Controller Agent relies on a narrow MCP tool layer to carry out the deterministic checks that must happen before reasoning begins. These tools are configured as reusable validation adapters and are not used to replace domain judgment.
 

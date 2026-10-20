@@ -148,6 +148,15 @@ Return only a structured output with:
 - Compute basic impact categories and priority logic
 - Maintain structured outputs for route and fleet implications
 
+## 9A. Operational Validation and Conflict Handling
+The Operations Agent should treat conflicting operational data as a decision-quality issue, not as a minor discrepancy.
+
+- If route impact data is incomplete or highly time-bound, flag the recommendation as provisional
+- If multiple aircraft substitutions are feasible but customer impact differs materially, present both outcomes and require human selection
+- If a route conflict is detected, the recommendation should clearly describe which option is operationally preferred and why the alternative is less viable
+
+This keeps the operational analysis grounded in measurable disruption patterns while preserving the human approval gate for difficult trade-offs.
+
 ### 8.1 MCP Configuration for Deterministic Validation
 Operational validation is performed through a deterministic MCP tool layer before the LLM evaluates disruption and trade-offs.
 

@@ -18,6 +18,8 @@ This folder contains the specialist agent proposals for the AOG Recovery Coordin
 ## Coordination Model
 The Controller Agent remains the orchestration layer, while each specialist agent owns its own local reasoning, context, memory, tool access, validation, and recommendation output. This separation preserves clarity and makes each agent easier to implement and govern.
 
+The merged design also incorporates the decision-scoring and confidence model from the parallel Unit B proposal: each domain agent contributes evidence, the Report Creation Agent ranks viable options, and a final recommendation is only accepted when the confidence, assumptions, and risk profile are explicit and reviewable by a human approver.
+
 ## Standard Pattern for Each Agent
 Each proposal follows the same contract format:
 
