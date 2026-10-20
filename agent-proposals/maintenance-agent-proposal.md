@@ -146,6 +146,15 @@ Return only a structured output with:
 - Apply safety and approval gates
 - Map technical findings into structured repair categories
 
+## 9A. Domain Validation and Conflict Handling
+The Maintenance Agent must identify when the technical signal is not consistent enough to support a confident recommendation.
+
+- If maintenance estimates a 3-hour repair but operations indicates a 7-hour disruption, the case is flagged as internally inconsistent
+- If the defect summary is incomplete or work-order data is missing required fields, the recommendation should be provisional and escalated
+- If safety or engineering approval is not present, the maintenance recommendation must remain advisory until approved
+
+This ensures the Maintenance Agent contributes technically grounded evidence without overstating confidence.
+
 ### 8.1 MCP Configuration for Deterministic Validation
 This agent uses MCP-hosted tools to perform the validation steps that are deterministic and repeatable. The purpose is to ensure the LLM only reasons over complete and trustworthy technical inputs.
 
