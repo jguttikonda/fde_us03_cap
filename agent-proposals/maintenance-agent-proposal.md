@@ -6,35 +6,41 @@ This document is a detailed draft for the Maintenance Agent and supplements the 
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Maintenance Agent evaluates whether an aircraft can be recovered through technical repair and estimates the practical maintenance constraints involved in a recovery strategy.
+The Maintenance Agent establishes when an aircraft can return to service by combining the estimated repair duration with parts availability and lead time from its Inventory sub-agent. It then reports risk metrics based on that ETA, including ETA confidence and relevant delay, parts-dependency, and repair-complexity risks.
 
 ## 2. Role in the System
-This agent focuses on the technical feasibility of repair. It assesses the condition of the aircraft, identifies the maintenance work required, and determines whether the aircraft can realistically return to service within the required recovery window.
+The Maintenance Agent is a top-level agent called by the Controller to determine the aircraft's return-to-service ETA. It calls its Inventory sub-agent for parts availability and lead-time information, combines that information with the estimated repair duration, and returns the ETA, risk metrics, confidence, and assumptions to the Controller.
+
+## 2A. Handshake with Other Agents
+Agent type:    top-level, has one sub-agent
+Called by:     Controller (H2: validated event and defect context; asks for repair ETA)
+Calls:         Inventory sub-agent (H3: required part numbers, station, and need-by time)
+Payload in and out: H2 event/defect context; H3/H4 parts request and availability/lead time; H5 return-to-service ETA, risk metrics, confidence, and assumptions
 
 ## 3. Primary Responsibilities
-- Assess aircraft repairability
-- Review maintenance history and current defects
-- Estimate downtime and repair duration
-- Identify technical dependencies and constraints
-- Recommend repair versus defer or escalate
+- Assess aircraft repairability and estimate repair duration
+- Obtain parts availability and lead-time information from the Inventory sub-agent
+- Establish the return-to-service ETA from repair duration and parts wait
+- Report ETA confidence and risk metrics based on the ETA
+- Recommend repair versus defer or escalate, with assumptions and constraints
 
 ## 4. Non-Deterministic Responsibilities
 - Interpret partial or ambiguous maintenance history
-- Assess how uncertainty changes the repair recommendation
-- Estimate turnaround based on incomplete operational realities
-- Weigh technical feasibility against urgency and schedule pressure
-- Recommend whether to repair, reroute, substitute, or escalate
+- Assess how repair-duration and parts-timing uncertainty affect the ETA and its confidence
+- Estimate the return-to-service window when repair or supplier timing is uncertain
+- Assess delay, parts-dependency, and repair-complexity risks based on the ETA
+- Weigh technical feasibility against urgency and schedule pressure when recommending repair, defer, or escalation
 
 ## 5. Context Engineering and Memory Management
-The Maintenance Agent maintains a technical case memory focused on the active aircraft defect, maintenance state, work-order completeness, safety constraints, and repairability assumptions. It keeps the current evidence window compact and avoids long-term retention of noisy inspection records unless they directly affect the current recovery decision.
+The Maintenance Agent maintains a technical case memory focused on the active aircraft defect, maintenance state, safety constraints, repair-duration estimates, parts dependencies, ETA assumptions, and risk assessment. It keeps the current evidence window compact and avoids long-term retention of noisy inspection records unless they directly affect the current recovery decision.
 
-- Short-term memory: current aircraft condition, active defect summary, safety gate state, and work-order status
-- Working memory: the technical findings, assumptions, and dependencies currently under consideration for repair feasibility
+- Short-term memory: current aircraft condition, active defect summary, safety gate state, repair-duration estimate, parts status, and current ETA
+- Working memory: technical findings, repair and parts-timing assumptions, and dependencies under consideration for the ETA and risk assessment
 - Durable local memory: recurring maintenance patterns, standard rule exceptions, and known repair categories for similar defects
-- Context compression rule: retain only the maintenance facts that materially affect the repair recommendation and downstream approvals
+- Context compression rule: retain only the maintenance and parts facts that materially affect the ETA, its confidence, risk metrics, and downstream approvals
 
 ## 6. LLM Role
-The Maintenance LLM acts as the technical feasibility analyst. It reads maintenance context, work orders, inspections, and engineering notes to reason about the most plausible repair path.
+The Maintenance LLM acts as the technical feasibility and ETA analyst. It reasons over maintenance context, work-order task details, inspections, engineering notes, and Inventory results to estimate the repair duration and return-to-service ETA, then assesses risk metrics based on that ETA.
 
 ## 7. LLM Prompt Template
 This agent should use a short sequence of prompt interactions instead of a single broad technical prompt. The split keeps fact extraction, reasoning, and final validation separate, which improves traceability and reduces context drift.
@@ -53,7 +59,7 @@ Inputs you must assess:
 
 Decision rules:
 - Keep only facts that materially affect repairability
-- Flag missing fields, stale records, or contradictory maintenance notes
+- Flag missing, stale, or contradictory maintenance evidence that affects repairability or the ETA
 - Do not infer technical feasibility without supporting evidence
 
 Return only a structured output with:
@@ -72,20 +78,26 @@ Use the grounded evidence from Prompt A to assess repair feasibility and determi
 Inputs you must assess:
 - Relevant aircraft condition facts
 - Maintenance records and defect history
-- Work-order completeness and technical constraints
-- Part dependency requirements
+- Work-order task details and technical constraints
+- Inventory availability, parts-ready ETA, and part dependency requirements
 
 Decision rules:
 - Determine whether repair is feasible, uncertain, or not feasible
 - Identify the maintenance actions and dependencies required
-- Highlight risk and technical constraints clearly
+- Estimate repair duration and combine it with parts wait to establish the return-to-service ETA
+- State ETA confidence and assess risk metrics based on the ETA
+- Highlight assumptions and technical constraints clearly
 
 Return only a structured output with:
 1. repairability_status
 2. required_actions
 3. estimated_ground_time_hours
-4. technical_risks
-5. confidence
+4. eta_hours
+5. return_to_service_time
+6. eta_confidence
+7. risk_metrics
+8. technical_risks
+9. assumptions
 ```
 
 ### 7.3 Prompt C — Final Validation and Output Normalization
@@ -102,13 +114,19 @@ Inputs you must assess:
 Decision rules:
 - Reject unsupported technical conclusions
 - Ensure the output is traceable and ready for downstream use
+- Verify that the ETA, confidence, and risk metrics are supported by the stated evidence and assumptions
 - Normalize the result into the standard maintenance contract format
 
 Return only a structured output with:
 1. final_summary
 2. final_recommendation
-3. required_approvals
-4. approval_status
+3. eta_hours
+4. return_to_service_time
+5. eta_confidence
+6. risk_metrics
+7. assumptions
+8. required_approvals
+9. approval_status
 ```
 
 ## 8. Expected Output Standard Format
@@ -122,6 +140,14 @@ Return only a structured output with:
     "Action 2"
   ],
   "estimated_ground_time_hours": 0,
+  "eta_hours": 0,
+  "return_to_service_time": "ISO-8601 timestamp or stated time window",
+  "eta_confidence": 0.0,
+  "risk_metrics": {
+    "delay_risk": "low|medium|high",
+    "parts_dependency_risk": "low|medium|high",
+    "repair_complexity_risk": "low|medium|high"
+  },
   "technical_risks": [
     "Risk 1",
     "Risk 2"
@@ -140,9 +166,9 @@ Return only a structured output with:
 ```
 
 ## 9. Deterministic Responsibilities
-- Validate aircraft condition metadata and work-order completeness
+- Validate aircraft condition metadata
 - Check required maintenance actions against standard procedures
-- Detect missing fields, incomplete records, or obvious data inconsistencies
+- Detect missing aircraft identity or defect metadata and obvious data inconsistencies
 - Apply safety and approval gates
 - Map technical findings into structured repair categories
 
@@ -150,16 +176,15 @@ Return only a structured output with:
 The Maintenance Agent must identify when the technical signal is not consistent enough to support a confident recommendation.
 
 - If maintenance estimates a 3-hour repair but operations indicates a 7-hour disruption, the case is flagged as internally inconsistent
-- If the defect summary is incomplete or work-order data is missing required fields, the recommendation should be provisional and escalated
+- If defect or maintenance evidence needed to estimate the repair duration is missing, the ETA should be provisional and the missing evidence stated
 - If safety or engineering approval is not present, the maintenance recommendation must remain advisory until approved
 
 This ensures the Maintenance Agent contributes technically grounded evidence without overstating confidence.
 
 ### 8.1 MCP Configuration for Deterministic Validation
-This agent uses MCP-hosted tools to perform the validation steps that are deterministic and repeatable. The purpose is to ensure the LLM only reasons over complete and trustworthy technical inputs.
+This agent uses MCP-hosted tools to perform deterministic validation steps. The purpose is to ensure the LLM reasons over trustworthy technical inputs.
 
 - `validate_aircraft_metadata`: checks aircraft identity, defect status, and required maintenance context before analysis
-- `validate_workorder_completeness`: verifies task records, required fields, and work-order linkage are present
 - `check_standard_maintenance_rules`: applies maintenance procedure checks and rule-based repair mapping
 - `check_safety_gate`: validates whether the technical path is compliant with configured safety restrictions and approval conditions
 - `map_repair_category`: converts the technical findings into a standard repair classification used by downstream agents
@@ -168,13 +193,13 @@ This agent uses MCP-hosted tools to perform the validation steps that are determ
 The deterministic validation layer calls the domain APIs that own the source technical facts:
 
 - Aircraft Maintenance API: returns defect history, aircraft status, and technical metadata
-- Work Order / Task API: returns repair tasks, work-order completeness, and required maintenance actions
+- Work Order / Task API: returns repair tasks and required maintenance actions
 - Engineering Rules API: provides standard procedures, maintenance constraints, and repair classification logic
 - Safety / Approval API: enforces gate checks and returns compliance or exception states
 - Part Dependency API: verifies which components and spare dependencies are required for the proposed repair path
 
 ### 8.3 Tool Interaction Contract (JSON)
-Each tool call captures the exact request/response contract that feeds the deterministic repairability validation layer.
+Each tool call captures the exact request/response contract that feeds the deterministic maintenance validation layer.
 
 #### 8.3.1 `validate_aircraft_metadata`
 Request JSON:
@@ -198,27 +223,7 @@ Response JSON:
 }
 ```
 
-#### 8.3.2 `validate_workorder_completeness`
-Request JSON:
-```json
-{
-  "aircraft_id": "N123AB",
-  "work_order_id": "WO-44019",
-  "required_sections": ["task_list", "part_dependencies", "inspection_notes"]
-}
-```
-
-Response JSON:
-```json
-{
-  "work_order_status": "complete",
-  "missing_sections": [],
-  "part_dependencies": ["hydraulic_pump", "seal_kit"],
-  "inspection_notes_present": true
-}
-```
-
-#### 8.3.3 `check_standard_maintenance_rules`
+#### 8.3.2 `check_standard_maintenance_rules`
 Request JSON:
 ```json
 {
@@ -241,7 +246,7 @@ Response JSON:
 }
 ```
 
-#### 8.3.4 `check_safety_gate`
+#### 8.3.3 `check_safety_gate`
 Request JSON:
 ```json
 {
@@ -265,7 +270,7 @@ Response JSON:
 }
 ```
 
-#### 8.3.5 `map_repair_category`
+#### 8.3.4 `map_repair_category`
 Request JSON:
 ```json
 {
@@ -293,7 +298,8 @@ These are the curated, validated facts the LLM should reason over to assess tech
 - Aircraft defect summary and current technical status
 - Maintenance history and prior inspections
 - Work-order context and repair constraints
-- Part dependency information relevant to the repair
+- Inventory availability, parts-ready ETA, and part dependency information relevant to the repair
+- Repair-duration estimate and ETA assumptions
 - Technical notes, assumptions, and uncertainty in the aircraft record
 
 ## 11. Tool / External System Inputs
@@ -307,7 +313,8 @@ This is the upstream evidence handshake: the structured system inputs consumed b
 ## 12. LLM-Facing Outputs
 These are the outputs the LLM should produce as reasoning and recommendation artifacts after evaluating the validated evidence:
 - Repair feasibility assessment
-- Estimated grounded time and technical downtime range
+- Estimated repair duration and return-to-service ETA
+- ETA confidence and risk metrics based on the ETA, including delay, parts-dependency, and repair-complexity risk
 - Required maintenance actions and dependencies
 - Technical risk and constraint summary
 - Recommendation to repair, defer, or escalate
@@ -330,19 +337,24 @@ The Maintenance Agent should validate its output by checking:
 - whether the evidence supports the repair conclusion
 - whether the recommended actions are technically coherent
 - whether there are hidden dependencies not captured in the current context
+- whether the ETA reflects both estimated repair duration and Inventory parts timing
+- whether ETA confidence and risk metrics are explicit and supported by the stated assumptions
 - whether the output is sufficiently explicit for downstream decision-making
 
 ## 14. Questions This Agent Seeks to Answer
 - Is the aircraft repairable under the current conditions?
-- How long will the repair take?
+- What is the estimated repair duration, parts wait, and return-to-service ETA?
+- How confident is the ETA, and what risks follow from it?
 - What actions, parts, and expertise are required?
 - Which technical constraints could prevent the repair path?
-- What is the confidence level in this recommendation?
+- What assumptions support the ETA and recommendation?
 
 ## 15. Acceptance Criteria
 The Maintenance Agent is successful when it:
 - makes a technically credible repair assessment
-- clearly states assumptions and risk
+- establishes the return-to-service ETA from repair duration and parts timing
+- reports ETA confidence and risk metrics based on the ETA
+- clearly states assumptions and risks
 - distinguishes between confirmed feasible and uncertain repair paths
 - supports the Controller with actionable maintenance evidence
 

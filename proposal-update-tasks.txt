@@ -93,11 +93,11 @@ PART 3.  TASK CHART  (4 tasks each, effort balanced: S=1, M=2, L=3)
   ----+-----------------------------------------+---------------------------------------------+------+-------+-------
   T01 | propsal.md (+ root README.md)           | Remove A2A wording                          |  S   | Sri   | [ ]
   T02 | propsal.md                              | Remove 6.2, point to controller file        |  S   | Preet | [ ]
-  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [ ]
+  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [x]
   T04 | propsal.md                              | Remove Report Creation Agent everywhere     |  L   | Preet | [ ]
   T05 | propsal.md                              | Redefine agent descriptions + handshake     |  L   | Sri   | [ ]
   T06 | propsal.md                              | Rewrite 7.1 Controller diagram              |  M   | Sri   | [ ]
-  T07 | propsal.md                              | Merge 7.2 + 7.3 (Maintenance + Inventory)   |  M   | Jag   | [ ]
+  T07 | propsal.md                              | Merge 7.2 + 7.3 (Maintenance + Inventory)   |  M   | Jag   | [x]
   T08 | propsal.md                              | Tag Sections 9-13 OPTIONAL / GOOD TO HAVE   |  S   | Jay   | [ ]
   T09 | controller-agent-proposal.md            | Redefine description + handshake            |  M   | Sri   | [ ]
   T10 | controller-agent-proposal.md            | Add deterministic final reporting           |  M   | Preet | [ ]
