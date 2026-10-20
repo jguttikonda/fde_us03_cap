@@ -135,21 +135,16 @@ The Controller Agent is the main orchestrator. It receives the AOG event, delega
 ### 6.1 LLM Role
 The Controller LLM acts as the coordination planner. It is not expected to make all technical decisions itself; instead, it decides which specialist agents are needed, what information must be gathered, and how to combine the outputs into a coherent recommendation.
 
-### 6.2 Deterministic Responsibilities
-- Validate the incoming AOG event structure
-- Check required data fields and event completeness
-- Standardize routing logic to the appropriate specialist agents
-- Apply escalation rules and approval gates
-- Create consistent report templates and output structure
+**Deterministic responsibilities:** The Controller's deterministic responsibilities, including assembling the final ranked recommendation report from fixed rules and templates, are defined in [agent-proposals/controller-agent-proposal.md](agent-proposals/controller-agent-proposal.md) (Section 9).
 
-### 6.3 Non-Deterministic Responsibilities
+### 6.2 Non-Deterministic Responsibilities
 - Interpret incomplete or conflicting operational signals
 - Decide which agent output is most relevant to the immediate disruption
 - Prioritize and sequence the response workflow
 - Synthesize a coordinated recovery narrative across teams
 - Recommend the most credible decision path for human approval
 
-### 6.4 Questions it seeks to answer
+### 6.3 Questions it seeks to answer
 - What is the current AOG event and what decision needs to be made?
 - Which specialist agents are relevant to this specific recovery case?
 - How should the findings be combined into a single coordinated recommendation?
@@ -159,24 +154,23 @@ The Controller LLM acts as the coordination planner. It is not expected to make 
 ## Maintenance Agent
 The Maintenance Agent assesses aircraft repairability and technical feasibility. It evaluates whether the aircraft can be recovered through repair and estimates practical maintenance constraints.
 
-### 6.5 LLM Role
+### 6.4 LLM Role
 The Maintenance LLM acts as the aircraft technical analyst. It interprets maintenance records, repair history, work-order conditions, and engineering constraints to determine whether a repair path is viable under the current state of the aircraft.
 
-### 6.6 Deterministic Responsibilities
+### 6.5 Deterministic Responsibilities
 - Validate required maintenance data and aircraft status fields
-- Check work-order completeness and maintenance readiness conditions
 - Detect obvious schedule conflicts or missing required actions
 - Apply standard safety and approval checks
 - Structure repair options into clear technical categories
 
-### 6.7 Non-Deterministic Responsibilities
+### 6.6 Non-Deterministic Responsibilities
 - Assess whether the aircraft is truly repairable under uncertain technical conditions
 - Interpret partial maintenance history and ambiguous defect descriptions
 - Estimate turnaround time when real-world constraints are not fully known
 - Balance technical feasibility against operational urgency
 - Recommend whether to repair, defer, or escalate a recovery path
 
-### 6.8 Questions it seeks to answer
+### 6.7 Questions it seeks to answer
 - Is the aircraft repairable in the current maintenance context?
 - What inspection, parts, and labor are required for repair?
 - How long will the aircraft need to remain grounded for maintenance?
@@ -186,24 +180,24 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 ## Inventory Agent
 The Inventory Agent supports maintenance-driven part validation. It checks whether the required material is available and whether alternate sourcing is feasible.
 
-### 6.9 LLM Role
+### 6.8 LLM Role
 The Inventory LLM acts as the materials readiness specialist. It combines inventory data, stock availability, and supplier/transfer logic to determine whether the required part can be secured in time and under acceptable risk.
 
-### 6.10 Deterministic Responsibilities
+### 6.9 Deterministic Responsibilities
 - Validate part number, location, quantity, and stock thresholds
 - Check current availability against minimum requirements
 - Match substitute or alternate part candidates using defined business rules
 - Route sourcing decisions to the correct procurement or transfer path
 - Compute expected lead times and material readiness status from structured data
 
-### 6.11 Non-Deterministic Responsibilities
+### 6.10 Non-Deterministic Responsibilities
 - Judge whether a part is feasible even when inventory data is incomplete or stale
 - Interpret supplier delays, transfer constraints, or certification risk in practical terms
 - Decide whether alternate parts are operationally acceptable
 - Assess trade-offs between sourcing speed and long-term aircraft recovery risk
 - Recommend the best material strategy under uncertain supply conditions
 
-### 6.12 Questions it seeks to answer
+### 6.11 Questions it seeks to answer
 - Is the required part available at the current location?
 - Can the part be sourced from another station or supplier?
 - What is the expected lead time for procurement or transfer?
@@ -213,58 +207,31 @@ The Inventory LLM acts as the materials readiness specialist. It combines invent
 ## Operations Agent
 The Operations Agent evaluates the larger business impact of the AOG event, including schedule and substitution implications. It assesses how the recovery path affects operations and customer impact.
 
-### 6.13 LLM Role
+### 6.12 LLM Role
 The Operations LLM acts as the disruption and prioritization analyst. It interprets flight schedules, fleet constraints, and route dependencies to determine which recovery option minimizes operational disruption while remaining feasible.
 
-### 6.14 Deterministic Responsibilities
+### 6.13 Deterministic Responsibilities
 - Validate flight and schedule data relevant to the AOG event
 - Detect route conflicts, aircraft assignment conflicts, and disruption triggers
 - Evaluate standard substitution and re-accommodation rules
 - Apply business priority logic and threshold-based impact checks
 - Produce consistent operational impact summaries
 
-### 6.15 Non-Deterministic Responsibilities
+### 6.14 Non-Deterministic Responsibilities
 - Determine which disruption pattern is most damaging under uncertain schedule conditions
 - Assess whether a swap, reroute, or delay is the least-bad recovery option
 - Weigh customer impact, crew constraints, and fleet optimization trade-offs
 - Recommend operational sequencing under incomplete real-time conditions
 - Prioritize among multiple plausible recovery paths when the numbers alone are not decisive
 
-### 6.16 Questions it seeks to answer
+### 6.15 Questions it seeks to answer
 - What flights or routes are affected by the aircraft outage?
 - Can the aircraft be swapped or substituted to reduce disruption?
 - What is the operational cost of delay, reroute, or recovery action?
 - Which recovery path minimizes business disruption while remaining feasible?
 - What is the impact on customer commitments, schedule reliability, and aircraft utilization?
 
-## Report Creation Agent
-The Report Creation Agent consolidates the output from the other agents and prepares a final recommendation package for human review.
-
-### 6.17 LLM Role
-The Report LLM acts as the synthesis and communication layer. It combines specialist findings, highlights trade-offs and assumptions, and presents the final recommendation in a clear decision-ready format for the human approver.
-
-### 6.18 Deterministic Responsibilities
-- Standardize input formatting and aggregation rules
-- Validate that all required agent outputs are present
-- Check for missing, contradictory, or incomplete recommendations
-- Apply report templates and structured summary layouts
-- Produce status categories such as feasible, high-risk, or deferred
-
-### 6.19 Non-Deterministic Responsibilities
-- Rank recovery options based on incomplete and sometimes conflicting evidence
-- Explain trade-offs between downtime, cost, disruption, and risk
-- Interpret how assumptions change the recommendation
-- Draft a human-readable explanation of why one option is preferred over another
-- Bring together technical, material, and operational considerations into one narrative
-
-### 6.20 Questions it seeks to answer
-- Which recovery options are feasible based on all agent outputs?
-- What are the trade-offs among repair, part transfer, and aircraft substitution?
-- Which option is most likely to minimize downtime and disruption?
-- How should the recommendation be explained clearly to a human approver?
-- What assumptions, uncertainties, and risks should be clearly stated before approval?
-
-### 6.21 Design Principle for All Agents
+### 6.16 Design Principle for All Agents
 Each agent should be built around the same pattern:
 - Input validation
 - Context engineering and local memory
@@ -275,7 +242,7 @@ Each agent should be built around the same pattern:
 
 This structure makes each role easier to develop as an LLM-based specialist while keeping the overall system coordinated and explainable.
 
-The final recommendation is synthesized by the Controller and Report Creation agents using the specialist findings from Maintenance, Inventory, and Operations. When confidence is low or domain signals conflict, the system escalates the case for human review rather than auto-approving a decision.
+The final recommendation report is assembled by the Controller using deterministic rules and templates, based on the specialist findings from Maintenance, Inventory, and Operations. When confidence is low or domain signals conflict, the system escalates the case for human review rather than auto-approving a decision.
 
 ---
 
@@ -309,7 +276,7 @@ Controller responsibilities:
 - Aggregate intermediate outputs
 - Generate final report for human approval
 
-## 7.2 Maintenance Agent Architecture
+## 7.2 Maintenance Agent Architecture (with Inventory Sub-Agent)
 
 ```mermaid
 flowchart LR
@@ -318,16 +285,31 @@ flowchart LR
     MCtx --> MMem[Maintenance Memory]
     MMem --> MLLM[Maintenance LLM Reasoning]
     MLLM --> MTools[MCP / Maintenance Tools]
-    MTools --> APIs[Maintenance Systems / Work Order APIs]
-    APIs --> MLLM
+    MTools --> MAPIs[Maintenance Systems / Work Order APIs]
+    MAPIs --> MLLM
+    MLLM -->|Parts request| ValidateI[Inventory Input Validation]
+    subgraph InvSub[Inventory Sub-Agent]
+        ValidateI --> IMem[Inventory Memory]
+        IMem --> ILLM[Inventory LLM Reasoning]
+        ILLM --> ITools[MCP / Inventory Tools]
+        ITools --> IAPIs[Inventory / Parts Systems]
+        IAPIs --> ILLM
+        ILLM --> EvalI[Output Evaluation + Guardrails]
+    end
+    EvalI -->|Part availability| MLLM
     MLLM --> EvalM[Output Evaluation + Guardrails]
-    EvalM --> MOut[Repair Feasibility Output]
+    EvalM --> MOut[ETA + Risk Metrics Output]
     MOut --> Controller[Controller Agent]
 ```
 
-The Maintenance Agent focuses on technical feasibility. It validates incoming maintenance context, uses local memory and tool access to assess repairability, and evaluates its output before sending the result back to the Controller.
+The Inventory Agent is a sub-agent of the Maintenance Agent, so the two are described together. Maintenance owns the technical feasibility assessment and the final output (ETA and risk metrics) returned to the Controller. Inventory owns part availability and alternate sourcing, and runs only when Maintenance calls it.
 
-Maintenance-specific elements:
+Handover between the two:
+- Maintenance passes the required parts and repair context to Inventory
+- Inventory returns part availability and sourcing options to Maintenance
+- Maintenance combines them into the ETA and risk metrics and sends that to the Controller
+
+### Maintenance-specific elements
 - Repairability assessment
 - Maintenance history and work-order context
 - Local domain memory for aircraft condition and constraints
@@ -335,25 +317,10 @@ Maintenance-specific elements:
 - Output evaluation before handoff
 - Tools for work-order and technical systems
 
-## 7.3 Inventory Agent Architecture
+### Inventory sub-agent elements
 
-```mermaid
-flowchart LR
-    SharedCtx[Shared Coordination Context] --> ValidateI[Input Validation]
-    ValidateI --> ICtx[Inventory Context Engineering]
-    ICtx --> IMem[Inventory Memory]
-    IMem --> ILLM[Inventory LLM Reasoning]
-    ILLM --> ITools[MCP / Inventory Tools]
-    ITools --> APIs[Inventory / Parts Systems]
-    APIs --> ILLM
-    ILLM --> EvalI[Output Evaluation + Guardrails]
-    EvalI --> IOut[Part Availability Output]
-    IOut --> Controller[Controller Agent]
-```
+The Inventory sub-agent focuses on material readiness. It validates incoming requests, checks part availability and alternate sourcing, and evaluates its output before returning the result to Maintenance.
 
-The Inventory Agent focuses on material readiness. It validates incoming requests, checks part availability and alternate sourcing, and evaluates its output before returning the result to the Controller.
-
-Inventory-specific elements:
 - Stock and location context
 - Supplier and alternate sourcing data
 - Material readiness and substitution logic
@@ -361,7 +328,7 @@ Inventory-specific elements:
 - Output evaluation before handoff
 - Tool access to inventory APIs and catalogs
 
-## 7.4 Operations Agent Architecture
+## 7.3 Operations Agent Architecture
 
 ```mermaid
 flowchart LR
@@ -387,32 +354,6 @@ Operations-specific elements:
 - Output evaluation before handoff
 - API access to schedule and fleet systems
 
-## 7.5 Report Creation Agent Architecture
-
-```mermaid
-flowchart LR
-    SharedCtx[Shared Coordination Context] --> ValidateR[Input Validation]
-    ValidateR --> RCtx[Report Context Engineering]
-    RCtx --> RMem[Report Memory]
-    RMem --> RLLM[Report LLM Reasoning]
-    RLLM --> RTools[MCP / Reporting Tools]
-    RTools --> APIs[Decision Summaries / Reporting Layer]
-    APIs --> RLLM
-    RLLM --> EvalR[Output Evaluation + Guardrails]
-    EvalR --> ROut[Ranked Recovery Recommendation]
-    ROut --> Human[Human Approval]
-```
-
-The Report Creation Agent is responsible for synthesizing findings from the other agents and producing the final recommendation. It validates the aggregated information, applies context-based reasoning, and evaluates the generated recommendation before it is presented to the human operator.
-
-Report-specific elements:
-- Recommendation synthesis
-- Trade-off comparison
-- Risk and assumption highlighting
-- Input validation before synthesis
-- Output evaluation before human review
-- Final report generation for human approval
-
 ## 7.6 Shared Design Principles Across Agents
 
 Each specialist agent follows the same internal pattern:
@@ -436,8 +377,8 @@ Controller->>Maintenance: Assess aircraft repairability
 Maintenance->>Inventory: Validate part availability
 Inventory-->>Maintenance: Part feasibility result
 Controller->>Operations: Evaluate schedule and operational impact
-Controller->>Report: Consolidate findings and prepare recommendation
-Report-->>User: Final recovery recommendation
+Controller->>Controller: Assemble final report using deterministic rules
+Controller-->>User: Final recovery recommendation
 User->>Controller: Human review and approval
 ```
 
@@ -472,18 +413,17 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 9. Tool & API Mapping
+# 9. Tool & API Mapping (OPTIONAL / GOOD TO HAVE)
 
 | Agent | Functional Focus |
 |---------|------------------|
 | Maintenance | Work orders, maintenance records, repair feasibility |
 | Inventory | Parts inventory, supplier availability, material readiness |
 | Operations | Flight schedules, route impact, aircraft substitution |
-| Report Creation | Recommendation synthesis and decision summary |
 
 ---
 
-# 10. Security Guardrails
+# 10. Security Guardrails (OPTIONAL / GOOD TO HAVE)
 
 - Read-only access where possible
 - Role-based access control
@@ -494,7 +434,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 11. Safety Controls
+# 11. Safety Controls (OPTIONAL / GOOD TO HAVE)
 
 - Advisory only
 - Human approval required
@@ -504,7 +444,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 ---
 
-# 12. Human-in-the-Loop Governance
+# 12. Human-in-the-Loop Governance (OPTIONAL / GOOD TO HAVE)
 
 ```text
 AI Recommendation
@@ -520,7 +460,7 @@ This ensures the platform supports decision-making without bypassing accountabil
 
 ---
 
-# 13. Expected Business Impact
+# 13. Expected Business Impact (OPTIONAL / GOOD TO HAVE)
 
 The solution is intended to help air operations teams act faster when time-sensitive recovery decisions are needed. It brings together technical feasibility, material readiness, and operational disruption into a single coordinated decision flow.
 
@@ -535,6 +475,6 @@ Expected impact:
 
 # 14. Final Positioning
 
-This project is scoped to a focused Agent-to-Agent recovery decision support model aligned to the architecture shown in the image. It removes the Logistics and Risk Agent scope while preserving the core decision-making flow around the Controller, Maintenance, Inventory, Operations, and Report Creation agents.
+This project is scoped to a focused multi-agent recovery decision support model aligned to the architecture shown in the image. It removes the Logistics and Risk Agent scope while preserving the core decision-making flow around the Controller, Maintenance, Inventory, and Operations agents, with the Controller assembling the final report.
 
 The result is a clear, operationally relevant capstone solution that remains realistic, explainable, and suitable for a human-approved aircraft recovery process.
