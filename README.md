@@ -1,7 +1,7 @@
 # FDE US03 Capstone Project
 
 ## Project Overview
-This repository contains the design and proposal for an Aircraft-On-Ground (AOG) Recovery Coordinator built as an Agent-to-Agent (A2A) decision support system using Google ADK.
+This repository contains the design and proposal for an Aircraft-On-Ground (AOG) Recovery Coordinator built as a multi-agent decision support system using Google ADK.
 
 The project focuses on helping airline operations teams respond to aircraft ground events faster, more consistently, and with clearer human oversight.
 

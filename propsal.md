@@ -1,7 +1,7 @@
 
 # Aircraft-On-Ground (AOG) Recovery Coordinator
 ## FDEUS03 Capstone Project
-### Agent-to-Agent (A2A) Recovery Decision Support System using Google ADK
+### Multi-Agent Recovery Decision Support System using Google ADK
 
 > Enterprise Capstone Proposal for Air Operations Workbench
 
@@ -9,7 +9,7 @@
 
 # 1. Executive Summary
 
-The Aircraft-On-Ground (AOG) Recovery Coordinator is an Agent-to-Agent (A2A) solution built using Google ADK. The platform orchestrates specialized agents across Maintenance, Inventory, Operations, and Recommendation management to recommend the optimal aircraft recovery strategy.
+The Aircraft-On-Ground (AOG) Recovery Coordinator is a multi-agent solution built using Google ADK. The platform orchestrates specialized agents across Maintenance, Inventory, Operations, and Recommendation management to recommend the optimal aircraft recovery strategy.
 
 The goal is to reduce AOG duration, improve decision quality, and provide explainable recommendations while keeping the human operator in the loop for final approval.
 
@@ -48,7 +48,7 @@ Benefits:
 
 ---
 
-# 4. Why A2A vs Deterministic Solutions
+# 4. Why Agentic vs Deterministic Solutions
 
 Deterministic systems typically follow rules such as:
 
@@ -535,6 +535,6 @@ Expected impact:
 
 # 14. Final Positioning
 
-This project is scoped to a focused Agent-to-Agent recovery decision support model aligned to the architecture shown in the image. It removes the Logistics and Risk Agent scope while preserving the core decision-making flow around the Controller, Maintenance, Inventory, Operations, and Report Creation agents.
+This project is scoped to a focused multi-agent recovery decision support model aligned to the architecture shown in the image. It removes the Logistics and Risk Agent scope while preserving the core decision-making flow around the Controller, Maintenance, Inventory, Operations, and Report Creation agents.
 
 The result is a clear, operationally relevant capstone solution that remains realistic, explainable, and suitable for a human-approved aircraft recovery process.
