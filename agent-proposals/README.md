@@ -8,17 +8,18 @@ This folder contains the specialist agent proposals for the AOG Recovery Coordin
 ## Shared Contract
 - [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md) — canonical structure used by all agent proposals
 
+## Coordinator
+- [controller-agent-proposal.md](controller-agent-proposal.md) — workflow orchestration, coordination, deterministic final report assembly, and human approval handoff
+
 ## Specialist Agent Proposals
-- [controller-agent-proposal.md](controller-agent-proposal.md) — workflow orchestration, coordination, and final synthesis
 - [maintenance-agent-proposal.md](maintenance-agent-proposal.md) — technical repairability and maintenance feasibility
-- [inventory-agent-proposal.md](inventory-agent-proposal.md) — material readiness, part availability, and sourcing
+- [inventory-agent-proposal.md](inventory-agent-proposal.md) — sub-agent of Maintenance: material readiness, part availability, and sourcing
 - [operations-agent-proposal.md](operations-agent-proposal.md) — route, fleet, and service disruption impact
-- [report-creation-agent-proposal.md](report-creation-agent-proposal.md) — final recommendation package for human approval
 
 ## Coordination Model
 The Controller Agent remains the orchestration layer, while each specialist agent owns its own local reasoning, context, memory, tool access, validation, and recommendation output. This separation preserves clarity and makes each agent easier to implement and govern.
 
-The merged design also incorporates the decision-scoring and confidence model from the parallel Unit B proposal: each domain agent contributes evidence, the Report Creation Agent ranks viable options, and a final recommendation is only accepted when the confidence, assumptions, and risk profile are explicit and reviewable by a human approver.
+The merged design also incorporates the decision-scoring and confidence model from the parallel Unit B proposal: each domain agent contributes evidence, the Controller Agent ranks viable options using a deterministic rule, and a final recommendation is only accepted when the confidence, assumptions, and risk profile are explicit and reviewable by a human approver.
 
 ## Standard Pattern for Each Agent
 Each proposal follows the same contract format:

@@ -28,8 +28,7 @@ The system recommends the most likely recovery path using specialized agents, ea
 - Maintenance Agent: repairability and technical feasibility
 - Inventory Agent: part availability and sourcing readiness
 - Operations Agent: flight disruption and fleet impact
-- Controller Agent: orchestration, routing, and approval workflow
-- Report Creation Agent: final recommendation, ranking, and explanation
+- Controller Agent: orchestration, routing, final report assembly (ranking and explanation), and approval workflow
 
 The final recommendation is always reviewed by a human before operational action is taken.
 
