@@ -9,9 +9,11 @@
 
 # 1. Executive Summary
 
-The Aircraft-On-Ground (AOG) Recovery Coordinator is an Agent-to-Agent (A2A) solution built using Google ADK. The platform orchestrates specialized agents across Maintenance, Inventory, Operations, and Recommendation management to recommend the optimal aircraft recovery strategy.
+The Aircraft-On-Ground (AOG) Recovery Coordinator is an Agent-to-Agent (A2A) decision-support platform built using Google ADK. Four agents (Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, and Operations Agent) collaborate to identify the recovery strategy that minimizes downtime, operational disruption, business impact, and risk while maintaining safety and compliance.
 
-The goal is to reduce AOG duration, improve decision quality, and provide explainable recommendations while keeping the human operator in the loop for final approval.
+The goal is to reduce AOG duration and accelerate recovery decisions, improve decision quality, and provide explainable recommendations while keeping the human operator in the loop for final approval. The solution is a decision-support platform, not an autonomous decision-maker.
+
+The Aircraft-On-Ground Recovery Coordinator uses Agent-to-Agent collaboration across Maintenance, Materials & Logistics, and Operations domains to identify the optimal aircraft recovery strategy, reducing downtime and operational disruption while keeping humans fully in control of operational decisions.
 
 Key goals:
 - Reduce aircraft downtime
@@ -50,7 +52,7 @@ Benefits:
 - Faster recovery decisions
 - Reduced aircraft downtime
 - Improved fleet utilization
-- Better inventory visibility
+- Better parts visibility across stations and vendors
 - Clearer trade-off analysis across recovery options
 - Explainable decision support for human operators
 
@@ -96,7 +98,7 @@ These responsibilities require judgment, contextual reasoning, and trade-off ana
 - Evaluating trade-offs between downtime, cost, and flight disruption
 - Prioritizing among multiple recovery options with incomplete certainty
 - Explaining recommendations in human-understandable terms
-- Recommending a coordinated plan across maintenance, inventory, and operations
+- Recommending a coordinated plan across maintenance, materials and logistics, and operations
 
 ## 4.3 Why Deterministic Logic Cannot Fully Replace the Agents
 
@@ -109,25 +111,39 @@ A deterministic engine is useful for guardrails, validation, and workflow enforc
 
 For these reasons, deterministic logic should be used for validation and enforcement, while the agentic layer is used for reasoning, prioritization, and recommendation generation. This division preserves reliability while still enabling judgment-based decision support.
 
+## 4.4 Why This Is Genuine A2A
+
+The Maintenance Agent and Materials & Logistics Agent communicate directly (A2A). The question is not "Do we have the part?" but "What is the most appropriate replacement strategy given maintenance history and part availability?" This is genuine A2A because:
+
+- Agents exchange domain expertise rather than raw data lookups.
+- Maintenance history influences inventory and sourcing decisions.
+- Alternatives are generated collaboratively.
+- Recommendations emerge from multiple perspectives.
+- Multiple valid outcomes exist (for example P-110 now versus upgraded P-120 later).
+- Decision quality improves through agent interaction.
+
+Worked example: the Maintenance Agent finds that Hydraulic Pump P-110 failed, that a similar failure occurred 3 times in 90 days, and that engineering notes recommend the upgraded P-120. The Materials & Logistics Agent evaluates P-110 availability, P-120 availability, lead times, inventory locations, and transfer options before responding. Every exchange is recorded in the Controller case context.
+
 ---
 
 # 5. Solution Overview
 
-The Recovery Coordinator orchestrates a focused decision flow led by the Controller Agent. The controller receives the AOG event, delegates to the specialist agents, and then routes the recommendation to the human decision-maker for approval.
+The Recovery Coordinator orchestrates a focused decision flow led by the Controller Agent. The controller receives the AOG event, delegates to the specialist agents, synthesizes their findings into ranked options, and then routes the recommendation to the human decision-maker for approval.
 
 ```mermaid
 flowchart TB
     Controller[Controller Agent] --> Maintenance[Maintenance Agent]
+    Controller --> ML[Materials & Logistics Agent]
     Controller --> Operations[Operations Agent]
-    Controller --> Report[Report Creation Agent]
-    Maintenance --> Inventory[Inventory Agent]
-    Inventory --> Maintenance
+    Maintenance <-->|A2A| ML
+    Maintenance --> Controller
+    ML --> Controller
     Operations --> Controller
-    Report --> Human[Human]
-    Human --> Final[Final Report]
+    Controller --> Human[Human Review]
+    Human --> Final[Approved Recovery Plan]
 ```
 
-This mirrors the image pattern: the Controller is at the top, the Maintenance and Operations branches are subordinate, Inventory is tied to the maintenance workflow, and the final recommendation is delivered to the Human for approval.
+The Controller is at the top; Maintenance and Materials & Logistics collaborate directly as peers (A2A); Operations assesses flight and network impact; the Controller ranks the options and delivers the recommendation to Human Review, and only the approved plan is final.
 
 ---
 
@@ -138,7 +154,7 @@ Each agent follows the same core pattern: validate input, retrieve local context
 This section describes the role-specific LLM responsibility, the deterministic controls, the non-deterministic reasoning, and the kind of questions each agent is designed to answer.
 
 ## Controller Agent
-The Controller Agent is the main orchestrator. It receives the AOG event, delegates analysis to specialist agents, consolidates findings, and drives the final recommendation to the human decision-maker.
+The Controller Agent (Recovery Coordinator) is the main orchestrator, decision synthesizer, and recommendation generator. It receives the AOG event, delegates analysis to the specialist agents, collects findings, evaluates alternatives, compares trade-offs, ranks options, and produces the final recovery plan with explainable recommendations for human review. There is no separate Recovery Recommendation Agent (see ADR-001).
 
 ### 6.1 LLM Role
 The Controller LLM acts as the coordination planner. It is not expected to make all technical decisions itself; instead, it decides which specialist agents are needed, what information must be gathered, and how to combine the outputs into a coherent recommendation.
@@ -151,6 +167,7 @@ The Controller LLM acts as the coordination planner. It is not expected to make 
 - Prioritize and sequence the response workflow
 - Synthesize a coordinated recovery narrative across teams
 - Recommend the most credible decision path for human approval
+- Compare trade-offs and rank competing recovery options, explaining the ranking
 
 ### 6.3 Questions it seeks to answer
 - What is the current AOG event and what decision needs to be made?
@@ -160,7 +177,7 @@ The Controller LLM acts as the coordination planner. It is not expected to make 
 - Which information is missing or uncertain and how should that affect the next step?
 
 ## Maintenance Agent
-The Maintenance Agent assesses aircraft repairability and technical feasibility. It evaluates whether the aircraft can be recovered through repair and estimates practical maintenance constraints.
+The Maintenance Agent assesses failure causes, aircraft repairability, and technical feasibility. It evaluates whether the aircraft can be recovered through repair, estimates repair duration and maintenance constraints, analyzes maintenance history, and detects recurring failures.
 
 ### 6.4 LLM Role
 The Maintenance LLM acts as the aircraft technical analyst. It interprets maintenance records, repair history, work-order conditions, and engineering constraints to determine whether a repair path is viable under the current state of the aircraft.
@@ -170,6 +187,7 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 - Detect obvious schedule conflicts or missing required actions
 - Apply standard safety and approval checks
 - Structure repair options into clear technical categories
+- Count recurring failures of the same part within a defined window
 
 ### 6.6 Non-Deterministic Responsibilities
 - Assess whether the aircraft is truly repairable under uncertain technical conditions
@@ -177,40 +195,44 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 - Estimate turnaround time when real-world constraints are not fully known
 - Balance technical feasibility against operational urgency
 - Recommend whether to repair, defer, or escalate a recovery path
+- Interpret recurring-failure patterns and recommend preferred replacement parts (for example upgraded P-120 instead of P-110) from historical repairs and engineering notes
 
 ### 6.7 Questions it seeks to answer
 - Is the aircraft repairable in the current maintenance context?
 - What inspection, parts, and labor are required for repair?
 - How long will the aircraft need to remain grounded for maintenance?
+- What failed, and has it happened before?
+- Which repair strategy worked previously, and are alternate parts recommended?
 - What technical risks or constraints could affect the recovery option?
 - What is the confidence level in the technical recommendation and what assumptions drive it?
 
-## Inventory Agent
-The Inventory Agent supports maintenance-driven part validation. It checks whether the required material is available and whether alternate sourcing is feasible.
+## Materials & Logistics Agent
+The Materials & Logistics Agent (merger of the former Inventory and Logistics roles, see ADR-001) is a peer of the Maintenance Agent. It covers inventory lookup, alternate and approved substitute part lookup, internal transfer analysis, vendor sourcing, shipping analysis, logistics planning, and ETA calculation. It collaborates directly with Maintenance (A2A) so replacement strategy reflects both maintenance history and part availability.
 
 ### 6.8 LLM Role
-The Inventory LLM acts as the materials readiness specialist. It combines inventory data, stock availability, and supplier/transfer logic to determine whether the required part can be secured in time and under acceptable risk.
+The Materials & Logistics LLM acts as the materials readiness and sourcing specialist. It combines inventory data, stock availability, supplier/transfer logic, and shipping options with the Maintenance Agent's failure history and preferred-part guidance to determine the best replacement and sourcing strategy under acceptable risk.
 
 ### 6.9 Deterministic Responsibilities
 - Validate part number, location, quantity, and stock thresholds
 - Check current availability against minimum requirements
-- Match substitute or alternate part candidates using defined business rules
-- Route sourcing decisions to the correct procurement or transfer path
-- Compute expected lead times and material readiness status from structured data
+- Match approved substitute or alternate part candidates using defined business rules
+- Route sourcing decisions to the correct transfer, vendor, or procurement path
+- Compute expected lead times, shipping durations, ETAs, and material readiness status from structured data
 
 ### 6.10 Non-Deterministic Responsibilities
 - Judge whether a part is feasible even when inventory data is incomplete or stale
-- Interpret supplier delays, transfer constraints, or certification risk in practical terms
-- Decide whether alternate parts are operationally acceptable
+- Interpret supplier delays, transfer constraints, shipping risk, or certification risk in practical terms
+- Decide whether alternate or upgraded parts are operationally acceptable
+- Compare replacement strategies (for example P-110 now versus upgraded P-120) using maintenance history and availability
 - Assess trade-offs between sourcing speed and long-term aircraft recovery risk
-- Recommend the best material strategy under uncertain supply conditions
+- Recommend the best sourcing strategy under uncertain supply conditions
 
 ### 6.11 Questions it seeks to answer
-- Is the required part available at the current location?
-- Can the part be sourced from another station or supplier?
-- What is the expected lead time for procurement or transfer?
-- Is an alternate replacement feasible without increasing operational risk?
-- Which material path is most likely to meet the recovery deadline with acceptable risk?
+- Do we have the part, and where are the parts?
+- What are the approved alternatives?
+- Can inventory be transferred from another station?
+- How fast can the part be delivered?
+- What is the best sourcing strategy to meet the recovery deadline with acceptable risk?
 
 ## Operations Agent
 The Operations Agent evaluates the larger business impact of the AOG event, including schedule and substitution implications. It assesses how the recovery path affects operations and customer impact.
@@ -222,6 +244,7 @@ The Operations LLM acts as the disruption and prioritization analyst. It interpr
 - Validate flight and schedule data relevant to the AOG event
 - Detect route conflicts, aircraft assignment conflicts, and disruption triggers
 - Evaluate standard substitution and re-accommodation rules
+- Assess aircraft availability and fleet utilization
 - Apply business priority logic and threshold-based impact checks
 - Produce consistent operational impact summaries
 
@@ -233,8 +256,8 @@ The Operations LLM acts as the disruption and prioritization analyst. It interpr
 - Prioritize among multiple plausible recovery paths when the numbers alone are not decisive
 
 ### 6.15 Questions it seeks to answer
-- What flights or routes are affected by the aircraft outage?
-- Can the aircraft be swapped or substituted to reduce disruption?
+- What flights or routes are affected, and what is the downstream network impact?
+- Can another aircraft be substituted, and is a swap viable?
 - What is the operational cost of delay, reroute, or recovery action?
 - Which recovery path minimizes business disruption while remaining feasible?
 - What is the impact on customer commitments, schedule reliability, and aircraft utilization?
@@ -250,7 +273,7 @@ Each agent should be built around the same pattern:
 
 This structure makes each role easier to develop as an LLM-based specialist while keeping the overall system coordinated and explainable.
 
-The final recommendation report is assembled by the Controller using deterministic rules and templates, based on the specialist findings from Maintenance, Inventory, and Operations. When confidence is low or domain signals conflict, the system escalates the case for human review rather than auto-approving a decision.
+The final recommendation report is assembled by the Controller using deterministic rules and templates, based on the specialist findings from Maintenance, Materials & Logistics, and Operations. When confidence is low or domain signals conflict, the system escalates the case for human review rather than auto-approving a decision.
 
 ---
 
@@ -265,26 +288,29 @@ flowchart LR
     Input[Validated AOG Event] --> Controller[Controller Agent]
     Controller --> Shared[Shared Coordination Context]
     Shared --> Maintenance[Maintenance Agent]
-    Shared --> Inventory[Inventory Agent]
+    Shared --> ML[Materials & Logistics Agent]
     Shared --> Operations[Operations Agent]
-    Shared --> Report[Report Creation Agent]
+    Maintenance <-->|A2A| ML
     Maintenance --> Findings[Agent Outputs]
-    Inventory --> Findings
+    ML --> Findings
     Operations --> Findings
-    Report --> Final[Final Recovery Recommendation]
-    Final --> Human[Human Approval]
+    Findings --> Synthesis[Controller: Evaluate, Compare, Rank]
+    Synthesis --> Final[Final Recovery Recommendation]
+    Final --> Human[Human Review]
+    Human --> Approved[Approved Recovery Plan]
 ```
 
-The Controller Agent is responsible for shared context coordination, task routing, and synthesis of the final recommendation. It does not own the detailed local reasoning memory for every agent; instead, it keeps only the shared state needed to coordinate the workflow.
+The Controller Agent is responsible for shared context coordination, task routing, and synthesis of the final recommendation, including evaluating alternatives, comparing trade-offs, and ranking options. It does not own the detailed local reasoning memory for every agent; instead, it keeps only the shared state needed to coordinate the workflow, including a record of the Maintenance and Materials & Logistics exchanges.
 
 Controller responsibilities:
 - Receive validated AOG input
 - Maintain shared coordination context
 - Route tasks to the relevant agents
 - Aggregate intermediate outputs
-- Generate final report for human approval
+- Evaluate alternatives, compare trade-offs, and rank options
+- Generate the final recovery plan and report for human review
 
-## 7.2 Maintenance Agent Architecture (with Inventory Sub-Agent)
+## 7.2 Maintenance and Materials & Logistics Agent Architecture (Peer A2A Collaboration)
 
 ```mermaid
 flowchart LR
@@ -295,46 +321,51 @@ flowchart LR
     MLLM --> MTools[MCP / Maintenance Tools]
     MTools --> MAPIs[Maintenance Systems / Work Order APIs]
     MAPIs --> MLLM
-    MLLM -->|Parts request| ValidateI[Inventory Input Validation]
-    subgraph InvSub[Inventory Sub-Agent]
-        ValidateI --> IMem[Inventory Memory]
-        IMem --> ILLM[Inventory LLM Reasoning]
-        ILLM --> ITools[MCP / Inventory Tools]
-        ITools --> IAPIs[Inventory / Parts Systems]
+    MLLM <-->|A2A: failure history, preferred part vs availability, lead time| ILLM
+    subgraph MLG[Materials & Logistics Agent]
+        SharedCtx --> ValidateI[Input Validation]
+        ValidateI --> IMem[Materials & Logistics Memory]
+        IMem --> ILLM[Materials & Logistics LLM Reasoning]
+        ILLM --> ITools[MCP / Inventory, Vendor, Shipping Tools]
+        ITools --> IAPIs[Inventory / Parts / Logistics Systems]
         IAPIs --> ILLM
         ILLM --> EvalI[Output Evaluation + Guardrails]
     end
-    EvalI -->|Part availability| MLLM
     MLLM --> EvalM[Output Evaluation + Guardrails]
     EvalM --> MOut[ETA + Risk Metrics Output]
     MOut --> Controller[Controller Agent]
+    EvalI --> IOut[Sourcing + ETA Output]
+    IOut --> Controller
 ```
 
-The Inventory Agent is a sub-agent of the Maintenance Agent, so the two are described together. Maintenance owns the technical feasibility assessment and the final output (ETA and risk metrics) returned to the Controller. Inventory owns part availability and alternate sourcing, and runs only when Maintenance calls it.
+Maintenance and Materials & Logistics are peer agents that collaborate directly (A2A). Maintenance owns the technical feasibility assessment, failure history, and preferred replacement guidance. Materials & Logistics owns part availability, alternate and substitute parts, transfer and vendor sourcing, shipping, and ETA. Both return their outputs to the Controller, and every exchange between them is recorded in the Controller case context.
 
-Handover between the two:
-- Maintenance passes the required parts and repair context to Inventory
-- Inventory returns part availability and sourcing options to Maintenance
-- Maintenance combines them into the ETA and risk metrics and sends that to the Controller
+Worked example (P-110 / P-120):
+- Maintenance finds that Hydraulic Pump P-110 failed, a similar failure occurred 3 times in 90 days, and engineering notes recommend upgraded P-120
+- Maintenance sends the failure context and preferred-part guidance to Materials & Logistics
+- Materials & Logistics evaluates P-110 availability, P-120 availability, lead times, inventory locations, and transfer options, then responds with a replacement-strategy comparison
+- Maintenance combines the response into the ETA and risk metrics and sends them to the Controller
 
 ### Maintenance-specific elements
 - Repairability assessment
-- Maintenance history and work-order context
+- Maintenance history, recurring failure detection, and work-order context
+- Preferred replacement part guidance from historical repairs
 - Local domain memory for aircraft condition and constraints
 - Input validation before reasoning
 - Output evaluation before handoff
 - Tools for work-order and technical systems
 
-### Inventory sub-agent elements
+### Materials & Logistics-specific elements
 
-The Inventory sub-agent focuses on material readiness. It validates incoming requests, checks part availability and alternate sourcing, and evaluates its output before returning the result to Maintenance.
+The Materials & Logistics Agent focuses on material readiness and delivery. It validates incoming requests, checks part availability, alternates, transfer and vendor sourcing, and shipping, and evaluates its output before returning the result to Maintenance and the Controller.
 
 - Stock and location context
-- Supplier and alternate sourcing data
+- Supplier, vendor, and alternate sourcing data
+- Shipping, logistics planning, and ETA calculation
 - Material readiness and substitution logic
 - Input validation before reasoning
 - Output evaluation before handoff
-- Tool access to inventory APIs and catalogs
+- Read-only tool access to inventory, vendor, and shipping APIs and catalogs
 
 ## 7.3 Operations Agent Architecture
 
@@ -381,12 +412,16 @@ This structure keeps the solution readable and aligned with the image while maki
 ```mermaid
 sequenceDiagram
 User->>Controller: Analyze AOG Event
-Controller->>Maintenance: Assess aircraft repairability
-Maintenance->>Inventory: Validate part availability
-Inventory-->>Maintenance: Part feasibility result
+Controller->>Maintenance: Assess failure and repairability
+Controller->>MaterialsLogistics: Assess sourcing and logistics
+Maintenance->>MaterialsLogistics: Failure history, P-110 failed 3x in 90 days, P-120 recommended
+MaterialsLogistics-->>Maintenance: P-110/P-120 availability, lead times, locations, transfer options
+Maintenance-->>Controller: ETA, risk metrics, preferred replacement
+MaterialsLogistics-->>Controller: Sourcing strategy and ETA
 Controller->>Operations: Evaluate schedule and operational impact
-Controller->>Controller: Assemble final report using deterministic rules
-Controller-->>User: Final recovery recommendation
+Operations-->>Controller: Flight impact, swap options
+Controller->>Controller: Evaluate, compare, rank options using deterministic rules
+Controller-->>User: Final recovery recommendation for human review
 User->>Controller: Human review and approval
 ```
 
@@ -405,12 +440,16 @@ The merged design adopts the best validation examples from Unit B while preservi
 - Expected result: Recommendation = Aircraft Swap
 
 ## Test Case 3
-- Input: Inventory API down
+- Input: Materials & Logistics API down
 - Expected result: System uses cached data, reduces confidence, and displays a warning in the final recommendation
 
 ## Test Case 4
 - Input: Multiple options within 2% of each other
 - Expected result: Both options are presented with trade-offs and human selection is required
+
+## Test Case 5 (A2A collaboration)
+- Input: Hydraulic Pump P-110 failed; similar failure 3 times in 90 days; engineering notes recommend upgraded P-120; P-110 in stock locally, P-120 only at another station
+- Expected result: Maintenance and Materials & Logistics exchange the failure history and availability, the P-110 versus P-120 comparison (availability, lead time, location, transfer) is recorded in the case context, and the Controller presents both strategies with trade-offs
 
 ## Scenario: Conflicting Data
 - Maintenance estimates 3 hours while Operations indicates 7 hours
@@ -425,20 +464,22 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 | Agent | Functional Focus |
 |---------|------------------|
-| Maintenance | Work orders, maintenance records, repair feasibility |
-| Inventory | Parts inventory, supplier availability, material readiness |
+| Controller (Recovery Coordinator) | Case context, routing, option comparison and ranking, recommendation and report assembly |
+| Maintenance | Work orders, maintenance records, repair feasibility, failure history |
+| Materials & Logistics | Parts inventory, alternate parts, transfer and vendor sourcing, shipping and ETA, material readiness |
 | Operations | Flight schedules, route impact, aircraft substitution |
 
 ---
 
 # 10. Security Guardrails (OPTIONAL / GOOD TO HAVE)
 
-- Read-only access where possible
-- Role-based access control
+- Read-only access to all APIs and systems
+- Role-based access control (RBAC)
 - Least privilege access
-- Audit trail for recommendations
+- Audit logging for recommendations and every inter-agent (A2A) exchange
 - Prompt injection awareness
 - Tool whitelisting
+- No operational actions may be performed by agents
 
 ---
 
@@ -447,6 +488,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 - Advisory only
 - Human approval required
 - Explainable outputs
+- Compliance validation before a recommendation is presented
 - Operational safeguards
 - Clear decision rationale
 
@@ -464,7 +506,7 @@ Human Approval
 Operational Action
 ```
 
-This ensures the platform supports decision-making without bypassing accountability. The agent recommends; the human approves.
+This ensures the platform supports decision-making without bypassing accountability. The agent recommends; the human approves. No operational actions may be performed by agents.
 
 ---
 
@@ -483,6 +525,28 @@ Expected impact:
 
 # 14. Final Positioning
 
-This project is scoped to a focused multi-agent recovery decision support model aligned to the architecture shown in the image. It removes the Logistics and Risk Agent scope while preserving the core decision-making flow around the Controller, Maintenance, Inventory, and Operations agents, with the Controller assembling the final report.
+The Aircraft-On-Ground Recovery Coordinator uses Agent-to-Agent collaboration across Maintenance, Materials & Logistics, and Operations domains to identify the optimal aircraft recovery strategy, reducing downtime and operational disruption while keeping humans fully in control of operational decisions.
+
+The project is scoped to a focused four-agent recovery decision support model: the Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, and Operations Agent, with the Controller ranking options and assembling the final report. There are no standalone Risk, Recommendation, Report, Inventory, or Logistics agents.
 
 The result is a clear, operationally relevant capstone solution that remains realistic, explainable, and suitable for a human-approved aircraft recovery process.
+
+---
+
+# 15. ADR-001: Merge Inventory and Logistics into a single Materials & Logistics Agent
+
+**Context:** Earlier drafts proposed separate Inventory and Logistics agents (and a Recovery Recommendation / Report agent). The team has a 2-3 day capstone window with five members, mocked APIs, and a need to demonstrate meaningful A2A collaboration.
+
+**Decision:** Merge Inventory and Logistics into a single Materials & Logistics Agent that collaborates directly with the Maintenance Agent as a peer. Recommendation and ranking stay with the Controller Agent, giving exactly four agents.
+
+**Reason:**
+- Simplifies a 2-3 day capstone
+- Reduces unnecessary complexity
+- Keeps strong business alignment (materials and logistics are one sourcing decision)
+- Still demonstrates meaningful A2A (Maintenance <-> Materials & Logistics)
+- Can be split into independent Inventory and Logistics agents in future releases
+
+**Consequences:**
+- One agent owns inventory lookup, alternates, transfers, vendor sourcing, shipping, and ETA, so its proposal is larger
+- Fewer agents to build, test, and trace; the Controller carries the ranking and recommendation logic
+- Future separation of Inventory and Logistics (and a dedicated Recommendation agent) remains possible without changing the A2A contract with Maintenance

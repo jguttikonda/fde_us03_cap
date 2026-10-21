@@ -17,7 +17,7 @@
 
 This Architecture Requirements Document (ARD) is the authoritative engineering baseline for the Aircraft-On-Ground (AOG) Recovery Coordinator. It converts the project proposal and agent drafts into uniquely identified, testable requirements that OpenSpec proposals, designs, specifications, and tasks must follow.
 
-The system coordinates specialized Maintenance, Inventory, Operations, and Report Creation agents through a Controller Agent. It addresses the business problem that AOG recovery information is distributed across Maintenance, Materials, Logistics, and Operations with no consolidated view. It evaluates recovery options and presents an explainable recommendation to a human decision-maker. It is an advisory system and does not execute operational actions.
+The system coordinates specialized Maintenance, Materials & Logistics, and Operations agents through a Controller Agent (Recovery Coordinator), for four agents in total. It addresses the business problem that AOG recovery information is distributed across Maintenance, Materials, Logistics, and Operations with no consolidated view. The Controller evaluates recovery options, ranks them, and presents an explainable recommendation to a human decision-maker. It is an advisory system and does not execute operational actions.
 
 ## 2. Source Documents and Precedence
 
@@ -28,9 +28,8 @@ This ARD consolidates requirements from:
 - `docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md`
 - `docs/agent-proposals/controller-agent-proposal.md`
 - `docs/agent-proposals/maintenance-agent-proposal.md`
-- `docs/agent-proposals/inventory-agent-proposal.md`
+- `docs/agent-proposals/materials-logistics-agent-proposal.md`
 - `docs/agent-proposals/operations-agent-proposal.md`
-- `docs/agent-proposals/report-creation-agent-proposal.md`
 
 When project artifacts disagree, use this precedence:
 
@@ -62,9 +61,9 @@ OpenSpec artifacts must cite these identifiers rather than copying requirements 
 - Shared typed contracts for cases, evidence, tools, and agent results
 - Controller-led routing and workflow coordination
 - Maintenance repairability analysis
-- Inventory availability and sourcing analysis
+- Materials and logistics analysis (inventory, alternate and substitute parts, transfer, vendor sourcing, shipping, and ETA)
 - Operations disruption and recovery analysis
-- Recovery-option scoring, ranking, and explanation
+- Controller-owned recovery-option scoring, ranking, and explanation
 - Confidence evaluation and escalation
 - Human review, approval, rejection, and requests for more information
 - Auditability, observability, degraded operation, and test evidence
@@ -74,12 +73,13 @@ OpenSpec artifacts must cite these identifiers rather than copying requirements 
 
 - Autonomous operational execution
 - Automatic approval of maintenance work
-- Automatic movement or reservation of inventory
+- Automatic movement, reservation, purchase, or shipment of parts or inventory
 - Automatic aircraft assignment changes
 - Automatic flight delay, reroute, cancellation, or customer re-accommodation
 - Production integration with live airline systems
 - Replacement of certified engineering, safety, dispatch, or operational authority
-- Logistics Agent and Risk Agent roles removed from the approved project scope
+- A standalone Risk Agent and a standalone Recommendation or Report Creation Agent (see ADR-001 in `docs/proposal.md`)
+- Separate Inventory and Logistics agents; they are merged into the Materials & Logistics Agent and MAY be split in a future release
 
 ## 5. Architectural Context
 
@@ -98,25 +98,25 @@ Human Operator
 | Maintenance    |  | Operations     |  | Shared Context |
 | Agent          |  | Agent          |  | and Audit      |
 +-------+--------+  +-------+--------+  +----------------+
-        |
+        ^
+        | A2A (recorded in case context)
         v
 +----------------+
-| Inventory      |
+| Materials &    |
+| Logistics      |
 | Agent          |
 +-------+--------+
         |
         +------------------+------------------+
                            v
-                 +----------------------+
-                 | Report Creation      |
-                 | Agent                |
-                 +----------+-----------+
-                            |
-                            v
+                 Controller ranks options and
+                 generates the recommendation
+                           |
+                           v
                     Human Approval
 ```
 
-The Controller owns routing and shared workflow state. Maintenance may request Inventory evidence, but the Controller must retain traceable ownership of the interaction. The Report Creation Agent owns ranking and presentation; it does not own final approval.
+The Controller owns routing, shared workflow state, option ranking, and recommendation generation. Maintenance and the Materials & Logistics Agent collaborate directly as peers, but the Controller must retain traceable ownership of the interaction through the case context. The Controller does not own final approval.
 
 ## 5A. Technology and Supporting Frameworks
 
@@ -308,14 +308,15 @@ The project SHOULD demonstrate production-readiness patterns but MUST NOT treat 
 | AOG event intake and validation | Google ADK Controller, Pydantic models and validators | pytest schema and invalid-input scenarios | ARD-DAT, ARD-CTL |
 | Controller routing and shared context | Google ADK agents, sessions, callbacks, typed context | deterministic routing tests and structured trajectory logs | ARD-SYS, ARD-CTL, ARD-OBS |
 | Maintenance repairability assessment | ADK Maintenance Agent, typed maintenance tools, mock maintenance adapters | domain fixtures, safety-gate and incomplete-work-order tests | ARD-MNT |
-| Inventory availability and sourcing | ADK Inventory Agent, typed inventory tools, HTTPX or local adapters | availability, stale-cache, substitution, and lead-time tests | ARD-INV, ARD-RES |
+| Materials and logistics analysis | ADK Materials & Logistics Agent, typed inventory, shipping, and vendor tools, HTTPX or local adapters | availability, stale-cache, substitution, sourcing, shipping-ETA, and lead-time tests | ARD-MLG, ARD-RES |
+| Maintenance-materials collaboration | Direct A2A exchange between Maintenance and Materials & Logistics agents, recorded in case context | replacement-strategy, recurring-failure, and recorded-exchange tests | ARD-SYS, ARD-MNT, ARD-MLG |
 | Operations disruption analysis | ADK Operations Agent, typed schedule and fleet tools | route-conflict, substitution, timeout, and customer-impact tests | ARD-OPS, ARD-RES |
-| Report creation and option ranking | ADK Report Creation Agent, deterministic Python scoring, Pydantic report model | exact weight, ranking, close-score, and missing-input tests | ARD-RPT |
+| Recommendation and option ranking | ADK Controller Agent, deterministic Python scoring, Pydantic recommendation model | exact weight, ranking, close-score, and missing-input tests | ARD-CTL |
 | Confidence and escalation | Deterministic Python policy functions and Pydantic enums | threshold boundary, conflict, and escalation tests | ARD-GOV |
 | Human review and approval | Typed approval command and record; optional FastAPI only if a UI/API is specified | no-bypass and approval-record tests | ARD-GOV, ARD-SEC |
 | MCP and external systems | MCP SDK when crossing process boundaries; HTTPX and typed adapters; deterministic mocks | contract, timeout, malformed-response, and structured-error tests | ARD-DAT, ARD-SYS, ARD-RES |
 | Local context and memory | ADK session or state abstractions with case-scoped Pydantic state | case-isolation, retention, and context-compression tests | ARD-SYS, ARD-DAT, ARD-SEC |
-| Explainability and evidence | Pydantic evidence models, structured rationale, score breakdowns, JSON logs | evidence-source, assumption, warning, and trace completeness assertions | ARD-PRN, ARD-RPT, ARD-OBS |
+| Explainability and evidence | Pydantic evidence models, structured rationale, score breakdowns, JSON logs | evidence-source, assumption, warning, and trace completeness assertions | ARD-PRN, ARD-CTL, ARD-OBS |
 | Security guardrails | Tool allowlists, Pydantic validation, settings isolation, secret scanning, Bandit and dependency audit | injection, unauthorized-tool, redaction, malformed-data, and read-only tests | ARD-SEC |
 | Resilience and degraded operation | Structured errors, bounded retries, timeouts, cache labeling, partial-result models | unavailable-tool, timeout, stale-data, retry, and partial-result tests | ARD-RES, ARD-NFR |
 | Audit and observability | Structured Python logging; OpenTelemetry when needed | event-schema, correlation, trajectory, and audit-record tests | ARD-OBS |
@@ -374,23 +375,23 @@ Every routing decision, tool invocation, agent result, scoring decision, escalat
 
 ### ARD-SYS-001 - Required components
 
-The system MUST include a Controller Agent, Maintenance Agent, Inventory Agent, Operations Agent, Report Creation Agent, deterministic tool layer, shared contract layer, and human-approval boundary.
+The system MUST include a Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, Operations Agent, deterministic tool layer, shared contract layer, and human-approval boundary. The system MUST NOT require any additional agent.
 
 ### ARD-SYS-002 - Controller ownership
 
-The Controller MUST own case intake, shared workflow state, routing, specialist coordination, result aggregation, conflict handling, escalation, and handoff for reporting.
+The Controller MUST own case intake, shared workflow state, routing, specialist coordination, result aggregation, conflict handling, escalation, option ranking, and recommendation generation.
 
 ### ARD-SYS-003 - Domain isolation
 
 Each specialist agent MUST reason only over its defined domain and MUST NOT assume responsibility assigned to another agent.
 
-### ARD-SYS-004 - Inventory coordination
+### ARD-SYS-004 - Maintenance and Materials & Logistics collaboration
 
-Maintenance MAY request Inventory evidence, but the request and response MUST pass through or be recorded in the Controller-managed case context.
+Maintenance and the Materials & Logistics Agent MAY collaborate directly as peers, including exchanging replacement-strategy requests and evidence, but every request and response MUST be recorded in the Controller-managed case context.
 
-### ARD-SYS-005 - Reporting ownership
+### ARD-SYS-005 - Recommendation ownership
 
-The Report Creation Agent MUST own recovery-option comparison, deterministic score calculation, relative ranking, explanation, and decision-brief generation.
+The Controller MUST own recovery-option comparison, deterministic score calculation, relative ranking, explanation, and decision-brief generation as specified in ARD-CTL-009 through ARD-CTL-016.
 
 ### ARD-SYS-006 - Approval ownership
 
@@ -458,7 +459,7 @@ The shared decision model MUST distinguish at least recommended, provisional, re
 
 The shared recovery-option model MUST support repair, part transfer, part substitution, aircraft swap or substitution, reroute, delay, and escalation.
 
-## 9. Case Intake and Controller Requirements
+## 9. Case Intake, Controller, and Recommendation Requirements
 
 ### ARD-CTL-001 - Intake validation
 
@@ -482,7 +483,7 @@ The Controller MUST maintain a case-scoped shared context without exposing unrel
 
 ### ARD-CTL-006 - Specialist result validation
 
-The Controller MUST validate each specialist result against its expected schema before aggregation.
+The Controller MUST validate each specialist result against its expected schema, and MUST check its presence, completeness, and contradiction state, before aggregation or ranking.
 
 ### ARD-CTL-007 - Conflict detection
 
@@ -490,15 +491,48 @@ The Controller MUST detect material conflicts among specialist findings and MUST
 
 ### ARD-CTL-008 - Missing result handling
 
-The Controller MUST identify incomplete or failed specialist analyses and MUST NOT represent the aggregated package as complete.
+The Controller MUST identify incomplete or failed specialist analyses and MUST NOT represent the aggregated package as complete. An incomplete or contradictory package MUST be identified in the final brief and MUST affect recommendation status and confidence. The Controller MUST NOT invent missing specialist findings or conceal contradictory evidence to complete a recommendation.
 
-### ARD-CTL-009 - Reporting handoff
+### ARD-CTL-009 - Recommendation generation
 
-The Controller MUST send the Report Creation Agent only validated specialist outputs plus explicit missing-data, failure, and conflict metadata.
+The Controller MUST generate the recovery recommendation from validated specialist outputs plus explicit missing-data, failure, and conflict metadata. No separate recommendation or report agent is permitted.
 
 ### ARD-CTL-010 - Workflow completion
 
 The Controller MUST record a terminal workflow status of resolved, escalated, rejected, or awaiting additional data.
+
+### ARD-CTL-011 - Scoring model
+
+Each viable recovery option MUST be scored using this baseline weighting:
+
+| Factor | Weight |
+|---|---:|
+| Recovery time | 30% |
+| Operational impact | 25% |
+| Materials and logistics availability | 20% |
+| Maintenance feasibility | 15% |
+| Cost impact | 5% |
+| Risk level | 5% |
+
+### ARD-CTL-012 - Deterministic score calculation
+
+Normalization, weight application, and score aggregation MUST be deterministic, reproducible, and independently testable.
+
+### ARD-CTL-013 - Score transparency
+
+The recommendation MUST show each option's factor scores, applied weights, aggregate score, dominant evidence, assumptions, and uncertainty.
+
+### ARD-CTL-014 - Ranked alternatives
+
+The recommendation MUST include feasible alternatives in relative rank order and MUST explain material trade-offs.
+
+### ARD-CTL-015 - Close-score rule
+
+When the top recovery options are within 2 percentage points of one another, the recommendation MUST present both options and require human selection rather than asserting one as uniquely preferred.
+
+### ARD-CTL-016 - Decision brief
+
+The final brief MUST include decision status, summary, ranked options, trade-offs, risks, assumptions, warnings, confidence, required human action, and a concise recommendation narrative. It MUST be understandable to a non-technical operational sponsor while retaining enough evidence for technical review.
 
 ## 10. Maintenance Requirements
 
@@ -534,39 +568,47 @@ Missing required work-order information MUST produce a provisional result and es
 
 A material difference between maintenance recovery time and operations disruption time MUST be recorded as a conflict for Controller adjudication.
 
-## 11. Inventory Requirements
+### ARD-MNT-009 - Recurring failure and replacement strategy
 
-### ARD-INV-001 - Inventory inputs
+The Maintenance result MUST identify recurring failures from maintenance history when present, and MUST state any preferred or engineering-recommended replacement part with its supporting history. A preferred replacement MUST be evaluated by the Materials & Logistics Agent before it is recommended (ARD-SYS-004, ARD-MLG-009).
 
-The Inventory Agent MUST evaluate part number, aircraft compatibility, required quantity, stock quantity, location, transfer state, substitutes, supplier constraints, and lead time when available.
+## 11. Materials & Logistics Requirements
 
-### ARD-INV-002 - Deterministic validation
+### ARD-MLG-001 - Materials and logistics inputs
 
-Stock counts, minimum thresholds, substitution compatibility, location consistency, and structured lead-time calculations MUST be deterministic.
+The Materials & Logistics Agent MUST evaluate part number, aircraft compatibility, required quantity, stock quantity, location, transfer state, substitutes, supplier and vendor constraints, shipping options, and lead time when available.
 
-### ARD-INV-003 - Availability status
+### ARD-MLG-002 - Deterministic validation
 
-The Inventory result MUST classify availability as available, limited, unavailable, or uncertain.
+Stock counts, minimum thresholds, substitution compatibility, location consistency, structured lead-time calculations, and shipping transit-time and ETA calculations MUST be deterministic.
 
-### ARD-INV-004 - Practical availability
+### ARD-MLG-003 - Availability status
 
-The Inventory Agent MUST distinguish physical stock from material that is practically usable within the recovery window.
+The Materials & Logistics result MUST classify availability as available, limited, unavailable, or uncertain.
 
-### ARD-INV-005 - Sourcing path
+### ARD-MLG-004 - Practical availability
 
-The result MUST identify the primary source, an alternate source when available, whether transfer is required, and expected lead time.
+The Materials & Logistics Agent MUST distinguish physical stock from material that is practically usable within the recovery window.
 
-### ARD-INV-006 - Inventory output
+### ARD-MLG-005 - Sourcing path
+
+The result MUST identify the primary source, an alternate source when available, the sourcing method (internal transfer, vendor purchase, borrow or pool, or expedite), the shipping path, whether transfer is required, and the calculated ETA.
+
+### ARD-MLG-006 - Materials and logistics output
 
 The result MUST include risk factors, assumptions, recommendation, confidence, reasoning, and next steps.
 
-### ARD-INV-007 - Stale inventory
+### ARD-MLG-007 - Stale materials and logistics data
 
-Stale or cached inventory data MUST be labeled, MUST reduce confidence, and MUST create a warning in downstream recommendations.
+Stale or cached inventory, vendor, or shipping data MUST be labeled, MUST reduce confidence, and MUST create a warning in downstream recommendations.
 
-### ARD-INV-008 - Substitution safety
+### ARD-MLG-008 - Substitution safety
 
-An alternate part MUST NOT be recommended unless the deterministic compatibility rule succeeds.
+An alternate, approved substitute, or upgraded part MUST NOT be recommended unless the deterministic compatibility rule succeeds.
+
+### ARD-MLG-009 - Maintenance collaboration
+
+When Maintenance identifies a failed part, recurring failure, or preferred replacement, the Materials & Logistics Agent MUST evaluate availability, lead time, inventory location, and transfer options for both the original and the preferred replacement part before responding, and MUST return the comparison to Maintenance. The exchange MUST be recorded in the Controller-managed case context (ARD-SYS-004).
 
 ## 12. Operations Requirements
 
@@ -602,58 +644,7 @@ When multiple feasible options have materially different customer impact, the al
 
 A detected route or assignment conflict MUST identify the affected resources and explain why the preferred option is more viable than alternatives.
 
-## 13. Recommendation and Reporting Requirements
-
-### ARD-RPT-001 - Input-package validation
-
-The Report Creation Agent MUST validate the presence, schema, completeness, and contradiction state of specialist outputs before ranking options.
-
-### ARD-RPT-002 - Incomplete package
-
-An incomplete or contradictory input package MUST be identified in the final brief and MUST affect recommendation status and confidence.
-
-### ARD-RPT-003 - Scoring model
-
-Each viable recovery option MUST be scored using this baseline weighting:
-
-| Factor | Weight |
-|---|---:|
-| Recovery time | 30% |
-| Operational impact | 25% |
-| Inventory availability | 20% |
-| Maintenance feasibility | 15% |
-| Cost impact | 5% |
-| Risk level | 5% |
-
-### ARD-RPT-004 - Deterministic score calculation
-
-Normalization, weight application, and score aggregation MUST be deterministic, reproducible, and independently testable.
-
-### ARD-RPT-005 - Score transparency
-
-The report MUST show each option's factor scores, applied weights, aggregate score, dominant evidence, assumptions, and uncertainty.
-
-### ARD-RPT-006 - Ranked alternatives
-
-The report MUST include feasible alternatives in relative rank order and MUST explain material trade-offs.
-
-### ARD-RPT-007 - Close-score rule
-
-When the top recovery options are within 2 percentage points of one another, the report MUST present both options and require human selection rather than asserting one as uniquely preferred.
-
-### ARD-RPT-008 - Decision brief
-
-The final brief MUST include decision status, summary, ranked options, trade-offs, risks, assumptions, warnings, confidence, required human action, and a concise recommendation narrative.
-
-### ARD-RPT-009 - No fabricated completeness
-
-The Report Creation Agent MUST NOT invent missing specialist findings or conceal contradictory evidence to complete a report.
-
-### ARD-RPT-010 - Human-readable explanation
-
-The final brief MUST be understandable to a non-technical operational sponsor while retaining enough evidence for technical review.
-
-## 14. Confidence, Escalation, and Approval Requirements
+## 13. Confidence, Escalation, and Approval Requirements
 
 ### ARD-GOV-001 - High-confidence threshold
 
@@ -687,11 +678,11 @@ A human decision record MUST include case ID, selected action, selected option w
 
 No confidence score, agent output, test mode, or degraded mode MAY bypass the human-approval boundary.
 
-## 15. Resilience and Failure Requirements
+## 14. Resilience and Failure Requirements
 
-### ARD-RES-001 - Inventory outage
+### ARD-RES-001 - Materials and logistics outage
 
-If the Inventory API is unavailable, the workflow MAY use explicitly labeled cached data, MUST reduce confidence, and MUST mark the recommendation as risk-adjusted.
+If the Materials & Logistics inventory API is unavailable, the workflow MAY use explicitly labeled cached data, MUST reduce confidence, and MUST mark the recommendation as risk-adjusted.
 
 ### ARD-RES-002 - Operations timeout
 
@@ -717,7 +708,7 @@ Fallback data or behavior MUST be visible in agent outputs, the final brief, and
 
 A failure in one case MUST NOT corrupt or expose another case's context.
 
-## 16. Security and Safety Requirements
+## 15. Security and Safety Requirements
 
 ### ARD-SEC-001 - Least privilege
 
@@ -755,7 +746,7 @@ The system MUST NOT claim that an aircraft is safe or airworthy; it may report t
 
 Audit records MUST be append-oriented and MUST preserve the recommendation and evidence version presented to the human reviewer.
 
-## 17. Observability Requirements
+## 16. Observability Requirements
 
 ### ARD-OBS-001 - Structured events
 
@@ -777,7 +768,7 @@ Traceability MUST rely on inputs, outputs, evidence, decisions, rules, scores, a
 
 The implementation SHOULD expose counts and durations for case processing, tool failures, agent failures, fallbacks, conflicts, and escalations.
 
-## 18. Performance and Operational Requirements
+## 17. Performance and Operational Requirements
 
 ### ARD-NFR-001 - Configurable timeouts
 
@@ -807,7 +798,7 @@ Thresholds, adapter selection, timeouts, and non-secret environment settings MUS
 
 Runtime and test dependencies MUST be declared and reproducibly installable.
 
-## 19. Verification Requirements
+## 18. Verification Requirements
 
 ### ARD-TST-001 - Requirement traceability
 
@@ -835,7 +826,7 @@ End-to-end validation MUST include:
 
 1. Part and technician available with no schedule conflict produces a repair recommendation for human approval.
 2. Required part unavailable with a feasible alternate aircraft produces an aircraft-swap candidate.
-3. Inventory unavailable uses labeled cached data, reduces confidence, and displays a warning.
+3. Materials & Logistics data unavailable uses labeled cached data, reduces confidence, and displays a warning.
 4. Top options within 2 percentage points are both presented for human selection.
 5. Conflicting maintenance and operations time estimates produce a provisional or escalated recommendation.
 
@@ -851,7 +842,7 @@ Known-good scenarios MUST remain executable as regression tests, and validation 
 
 Mock adapters and fixtures MUST produce deterministic results unless a test explicitly verifies uncertainty or failure behavior.
 
-## 20. Deployment and Readiness Requirements
+## 19. Deployment and Readiness Requirements
 
 ### ARD-DEP-001 - Environment documentation
 
@@ -877,7 +868,7 @@ Release readiness MUST include test results, unresolved issues, security conside
 
 The project MUST include sponsor-facing scenarios that demonstrate business value, explainability, degraded behavior, and human accountability.
 
-## 21. OpenSpec Conformance
+## 20. OpenSpec Conformance
 
 ### ARD-OSP-001 - Proposal traceability
 
@@ -907,7 +898,7 @@ OpenSpec changes SHOULD follow the dependency sequence in `docs/openspec-proposa
 
 A change SHOULD be archived only after its applicable ARD requirements and OpenSpec scenarios have verification evidence or documented deferrals.
 
-## 22. Capability-to-Requirement Map
+## 21. Capability-to-Requirement Map
 
 | OpenSpec capability area | Primary ARD sections |
 |---|---|
@@ -917,21 +908,21 @@ A change SHOULD be archived only after its applicable ARD requirements and OpenS
 | Tool contracts | ARD-DAT, ARD-SEC, ARD-RES |
 | Decision confidence | ARD-GOV |
 | Maintenance assessment | ARD-MNT |
-| Inventory sourcing | ARD-INV |
-| Maintenance-inventory coordination | ARD-SYS, ARD-MNT, ARD-INV |
+| Materials and logistics sourcing | ARD-MLG |
+| Maintenance-materials coordination | ARD-SYS, ARD-MNT, ARD-MLG |
 | Operations impact analysis | ARD-OPS |
 | Recovery orchestration | ARD-CTL, ARD-RES |
 | Agent routing | ARD-CTL |
 | Case escalation | ARD-GOV |
-| Recovery recommendation | ARD-RPT |
+| Recovery recommendation | ARD-CTL |
 | Human approval | ARD-GOV |
-| Decision reporting | ARD-RPT, ARD-OBS |
+| Decision reporting | ARD-CTL, ARD-OBS |
 | Workflow resilience | ARD-RES |
 | Security and audit | ARD-SEC, ARD-OBS |
 | Deployment readiness | ARD-DEP |
 | Capstone demonstration | ARD-TST, ARD-DEP |
 
-## 23. Definition of Done
+## 22. Definition of Done
 
 The architecture baseline is satisfied when:
 

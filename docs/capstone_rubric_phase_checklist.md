@@ -19,7 +19,7 @@ Checklist:
   - out-of-scope items defined
   - assumptions and constraints documented
 - Architecture is understandable
-  - Controller, Maintenance, Inventory, Operations, and Report roles are clear
+  - Controller (Recovery Coordinator, including recommendation and report), Maintenance, Materials & Logistics, and Operations roles are clear
   - human approval and escalation model is visible
 - Proposal is coherent
   - why the change is needed
@@ -239,7 +239,7 @@ Use the following as the overall gate logic:
 At this point, the repo is primarily in the Proposal Drafting and OpenSpec preparation stages. Implementation, testing, RAPID deployment artifacts, and demo readiness still need to be completed before the capstone would meet the rubric expectations.
 
 ## Documentation Reference
-- [propsal.md](propsal.md)
+- [proposal.md](proposal.md)
 - [agent-proposals](agent-proposals)
 - [README.md](README.md)
 - [FDE_Capstone_Rubric_v5.0.docx](FDE_Capstone_Rubric_v5.0.docx)

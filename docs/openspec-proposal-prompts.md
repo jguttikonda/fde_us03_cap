@@ -8,9 +8,8 @@ This document preserves the recommended OpenSpec proposal sequence for implement
 - `docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md`
 - `docs/agent-proposals/controller-agent-proposal.md`
 - `docs/agent-proposals/maintenance-agent-proposal.md`
-- `docs/agent-proposals/inventory-agent-proposal.md`
+- `docs/agent-proposals/materials-logistics-agent-proposal.md`
 - `docs/agent-proposals/operations-agent-proposal.md`
-- `docs/agent-proposals/report-creation-agent-proposal.md`
 
 ## Governing Architecture Baseline
 
@@ -32,7 +31,7 @@ These instructions supplement the enforcement rules in `openspec/config.yaml`.
           +-------------------+
           |                   |
           v                   v
-2. Maintenance/Inventory   3. Operations
+2. Maintenance/Materials & Logistics   3. Operations
           |                   |
           +---------+---------+
                     v
@@ -92,26 +91,31 @@ Expected scope:
 - Representative test fixtures
 - Logging, configuration, and secret-handling conventions
 
-## 2. Implement Maintenance and Inventory Analysis
+## 2. Implement Maintenance and Materials & Logistics Analysis
 
 Suggested change name:
 
 ```text
-implement-maintenance-inventory-analysis
+implement-maintenance-materials-logistics-analysis
 ```
 
 Proposal prompt:
 
 ```text
-/opsx-propose Implement the Maintenance and Inventory analysis workflow using
+/opsx-propose Implement the Maintenance and Materials & Logistics analysis workflow using
 the shared AOG contracts. Use docs/proposal.md,
 docs/agent-proposals/maintenance-agent-proposal.md,
-docs/agent-proposals/inventory-agent-proposal.md, and
+docs/agent-proposals/materials-logistics-agent-proposal.md, and
 docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as the authoritative source
-material. Cover repair feasibility, maintenance evidence, parts availability,
-alternate sourcing, material readiness, lead time, uncertainty, MCP tool
+material. Cover repair feasibility, maintenance evidence, recurring failure
+detection, preferred replacement parts, parts availability, alternate and
+approved substitute sourcing, internal transfer, vendor sourcing, shipping
+and ETA, material readiness, uncertainty, MCP tool
 adapters, deterministic guardrails, cached inventory fallback, conflict
-handling, structured handoffs, and unit and contract tests. Ensure confirmed
+handling, direct Maintenance to Materials & Logistics A2A collaboration
+(recorded in the Controller case context per ARD-SYS-004, e.g. P-110 failed
+3 times in 90 days and P-120 is recommended), structured handoffs, and unit
+and contract tests. Ensure confirmed
 facts, assumptions, stale data, and uncertainty remain distinguishable. Do not
 implement Controller orchestration or final report ranking in this change.
 ```
@@ -119,19 +123,20 @@ implement Controller orchestration or final report ranking in this change.
 Suggested capabilities:
 
 - `maintenance-assessment`
-- `inventory-sourcing`
-- `maintenance-inventory-coordination`
+- `materials-logistics-sourcing`
+- `maintenance-materials-logistics-coordination`
 
 Expected scope:
 
 - Maintenance evidence collection
 - Repairability and technical-feasibility assessment
-- Inventory availability and sourcing assessment
+- Recurring failure detection and preferred replacement guidance
+- Inventory availability, alternate part, and sourcing assessment
 - Work-order and maintenance-record tool contracts
-- Stock, supplier, substitution, and transfer tool contracts
+- Stock, supplier, substitution, transfer, and shipping tool contracts
 - Confirmed versus uncertain feasibility
-- Material readiness and alternate sourcing
-- Maintenance and inventory conflict handling
+- Material readiness, alternate sourcing, and ETA
+- Maintenance and Materials & Logistics conflict handling
 - Cached inventory fallback
 - Structured outputs for the Controller
 - Unit and contract tests
@@ -196,10 +201,10 @@ Cover AOG case intake, required-field validation, routing, shared coordination
 context, specialist invocation, result aggregation, partial agent failure,
 missing evidence, confidence reduction, material conflict detection,
 escalation, correlation and traceability, and human-approval enforcement.
-Inventory evidence may be requested by Maintenance, but the Controller must
+Materials & Logistics evidence may be requested directly by Maintenance (A2A), but the Controller must
 retain traceable ownership of routing and shared workflow state. Do not
 implement final weighted option ranking or decision-report rendering beyond
-the Controller-to-Report-Agent handoff.
+the Controller handoff to its own ranking and recommendation stage.
 ```
 
 Suggested capabilities:
@@ -235,15 +240,17 @@ Proposal prompt:
 ```text
 /opsx-propose Implement ranked AOG recovery recommendations and human approval.
 Use docs/proposal.md,
-docs/agent-proposals/report-creation-agent-proposal.md, and
-docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as source material. Consume the
-specialist findings supplied through the Controller. Cover candidate recovery
+docs/agent-proposals/controller-agent-proposal.md, and
+docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as source material (ARD-CTL-009
+to ARD-CTL-016 cover recommendation and ranking). Consume the
+specialist findings gathered by the Controller. Cover candidate recovery
 option construction, weighted option scoring, explainable trade-offs, evidence
 references, assumptions, risks, warnings, uncertainty, closely ranked options,
 provisional decisions, and approve, reject, or escalate actions. Produce a
 structured decision-ready report and an auditable human decision record. The
-Controller owns workflow completion and escalation; the Report Creation Agent
-owns ranking, explanation, and report generation; the human owns final
+Controller owns workflow completion, escalation, ranking, explanation, and
+report generation (there is no separate Recommendation or Report Creation
+Agent); the human owns final
 approval. The system must remain advisory and must never execute an operational
 action automatically. Include unit, contract, and workflow tests.
 ```
@@ -305,7 +312,7 @@ Expected scope:
 - End-to-end scenarios
 - Functional validation cases from the root proposal
 - Partial, missing, stale, and conflicting data
-- Inventory API unavailable
+- Materials & Logistics API unavailable
 - Operations timeout
 - Closely scored recovery options
 - Schema and tool-contract tests
@@ -344,7 +351,7 @@ Begin the next dependent change
 Recommended execution order:
 
 1. Propose, apply, verify, and archive `establish-aog-agent-foundation`.
-2. Propose `implement-maintenance-inventory-analysis` and `implement-operations-impact-analysis`.
+2. Propose `implement-maintenance-materials-logistics-analysis` and `implement-operations-impact-analysis`.
 3. Apply, verify, and archive both specialist changes.
 4. Propose, apply, verify, and archive `orchestrate-aog-recovery-cases`.
 5. Propose, apply, verify, and archive `deliver-ranked-recommendations-and-human-approval`.
@@ -354,16 +361,15 @@ Recommended execution order:
 
 Apply these decisions consistently across the changes.
 
-### Inventory routing
+### Maintenance and Materials & Logistics routing
 
 - The Controller owns workflow routing and shared workflow state.
-- Maintenance may request Inventory evidence through the shared case context.
+- Maintenance and Materials & Logistics collaborate directly as peers (A2A) and record each exchange in the shared case context.
 - Agent-to-agent interactions must remain visible in the case trace.
 
 ### Final synthesis ownership
 
-- The Controller owns workflow completion, conflict handling, and escalation.
-- The Report Creation Agent owns ranking, explanation, and report generation.
+- The Controller owns workflow completion, conflict handling, escalation, ranking, explanation, and report generation.
 - A human owns final approval or rejection.
 
 ### Confidence and escalation
@@ -385,7 +391,7 @@ The implementation is advisory:
 
 - It must not approve a maintenance work order automatically.
 - It must not change an aircraft assignment automatically.
-- It must not initiate an inventory transfer automatically.
+- It must not initiate a part transfer, purchase, or shipment automatically.
 - It must not delay or cancel a flight automatically.
 - Human approval is required before any operational action.
 

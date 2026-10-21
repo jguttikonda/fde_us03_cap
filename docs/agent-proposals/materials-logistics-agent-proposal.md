@@ -1,38 +1,42 @@
-# Inventory Agent Proposal Draft
+# Materials & Logistics Agent Proposal Draft
 
-This document is a detailed draft for the Inventory Agent and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the Materials & Logistics Agent and supplements the root system proposal in ../proposal.md. This agent merges the former Inventory Agent and Logistics scope into one agent (see ADR-001 in ../proposal.md); the two MAY be split into independent agents in a future release.
 
 ## 0. Shared Contract Reference
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Inventory Agent is a sub-agent of the Maintenance Agent. It determines whether required parts and material are available, evaluates realistic alternate sourcing, and returns parts-readiness information to Maintenance so it can establish the aircraft's return-to-service ETA.
+The Materials & Logistics Agent determines whether required parts and material are available, evaluates alternate and approved substitute parts, plans realistic sourcing (internal transfer or vendor purchase) and shipping, and calculates the parts-ready ETA. It collaborates directly with the Maintenance Agent as a peer so that the question is not only "Do we have the part?" but "What is the most appropriate replacement strategy given maintenance history and part availability?"
 
 ## 2. Role in the System
-Maintenance calls the Inventory Agent to validate physical and logistical availability for the active AOG case. The Inventory Agent answers Maintenance only; it does not communicate directly with the Controller or Operations Agent.
+The Materials & Logistics Agent is a top-level specialist agent called by the Controller and a direct collaboration peer of the Maintenance Agent. Maintenance shares failure context, maintenance history, and any preferred replacement part; this agent evaluates the original and the preferred replacement part (availability, lead time, inventory locations, transfer options, shipping) before responding. Every exchange with Maintenance is recorded in the Controller-managed case context. It does not communicate with the Operations Agent directly.
 
 ## 2A. Handshake with Other Agents
-Agent type:    sub-agent of Maintenance
-Called by:     Maintenance (H3)
-Calls:         none (reads inventory and supplier data through its tools)
-Returns to:    Maintenance (H4)
+Agent type:    top-level specialist, peer of Maintenance
+Called by:     Controller (routing and workflow) and Maintenance (A2A replacement-strategy request, H3)
+Calls:         none (reads inventory, supplier, and logistics data through its tools)
+Returns to:    Maintenance (H4, A2A response) and Controller (consolidated result via the case context)
 
 ## 3. Primary Responsibilities
-- Part availability checking
-- Alternate sourcing evaluation
+- Inventory lookup and part availability checking
+- Alternate part and approved substitute lookup
+- Internal transfer analysis
+- Vendor sourcing and procurement evaluation
+- Shipping analysis and logistics planning
+- ETA calculation
 - Supplier and station feasibility review
 - Material readiness assessment
-- Part substitution recommendation
+- Part substitution and replacement-strategy recommendation
 
 ## 4. Non-Deterministic Responsibilities
 - Interpret stale or incomplete inventory data
-- Judge whether alternate parts are operationally acceptable
-- Assess supplier reliability and timing risk under uncertainty
-- Recommend a path when inventory status is incomplete but time-sensitive
-- Balance speed of availability against long-term recovery risk
+- Judge whether alternate, substitute, or upgraded parts are operationally acceptable
+- Assess supplier and carrier reliability and timing risk under uncertainty
+- Recommend the best sourcing strategy (transfer, purchase, borrow, expedite) when status is incomplete but time-sensitive
+- Balance speed of availability against long-term recovery risk, including recurring-failure history provided by Maintenance
 
 ## 5. Context Engineering and Memory Management
-The Inventory Agent keeps a localized, materials-specific memory of the active AOG case. It retains the current part requirements, validation state, supplier constraints, location assumptions, and live risk signals needed for fast material decisions. It does not carry unrelated fleet or maintenance context into its current reasoning window; instead it maintains only the evidence needed to evaluate availability, lead time, and recovery feasibility.
+The Materials & Logistics Agent keeps a localized, materials-specific memory of the active AOG case. It retains the current part requirements, the maintenance findings and preferred replacement shared by Maintenance, validation state, supplier and carrier constraints, location assumptions, and live risk signals needed for fast material decisions. It does not carry unrelated fleet or maintenance context into its current reasoning window; instead it maintains only the evidence needed to evaluate availability, lead time, shipping, and recovery feasibility.
 
 - Short-term memory: part requirements, available stock snapshots, transfer assumptions, and urgent sourcing constraints
 - Working memory: list of viable source options, substitution outcomes, and risk flags that are currently being evaluated
@@ -40,22 +44,22 @@ The Inventory Agent keeps a localized, materials-specific memory of the active A
 - Context compression rule: keep only the part-level facts that affect supply availability, risk, and actionable recommendation
 
 ## 6. LLM Role
-The Inventory LLM acts as the materials readiness specialist. It interprets inventory data, stock locations, transfer rules, supplier constraints, and likely lead times to assess material readiness.
+The Materials & Logistics LLM acts as the materials and sourcing specialist. It interprets inventory data, stock locations, transfer rules, supplier and vendor constraints, shipping options, and likely lead times, together with the maintenance history shared by the Maintenance Agent, to assess material readiness and the most appropriate replacement strategy.
 
 ## 7. LLM Prompt Template
 This agent should use a staged prompt model instead of one large material-readiness prompt. The separation keeps evidence extraction, source evaluation, and final validation distinct and makes the recommendation easier to audit.
 
-### 7.1 Prompt A — Inventory Evidence Grounding
+### 7.1 Prompt A — Materials Evidence Grounding
 ```text
-You are the Inventory Agent for an aircraft AOG recovery workflow.
+You are the Materials & Logistics Agent for an aircraft AOG recovery workflow.
 
-Your task is to extract the fact-backed inventory evidence relevant to the current material decision.
+Your task is to extract the fact-backed inventory and logistics evidence relevant to the current material decision.
 
 Inputs you must assess:
-- Part number and stock status
+- Part number and stock status, for the failed part and any preferred replacement shared by Maintenance
 - Location-level availability and transfer constraints
-- Supplier and station readiness data
-- Alternate-part compatibility facts
+- Supplier, vendor, and station readiness data
+- Alternate and approved-substitute compatibility facts
 
 Decision rules:
 - Keep only the facts that affect material availability and urgency
@@ -71,19 +75,19 @@ Return only a structured output with:
 
 ### 7.2 Prompt B — Sourcing and Availability Reasoning
 ```text
-You are the Inventory Agent for an aircraft AOG recovery workflow.
+You are the Materials & Logistics Agent for an aircraft AOG recovery workflow.
 
-Use the grounded supply evidence from Prompt A to determine whether the required part can be secured in time and which sourcing path is most realistic.
+Use the grounded supply evidence from Prompt A to determine whether the required part, or the preferred replacement part proposed by Maintenance, can be secured in time and which sourcing and shipping path is most realistic.
 
 Inputs you must assess:
 - Part availability and transfer constraints
-- Supplier readiness and lead times
-- Alternate-part compatibility rules
+- Supplier readiness, shipping options, and lead times
+- Alternate-part and approved-substitute compatibility rules
 - Urgency and operational timing pressure
 
 Decision rules:
 - Distinguish confirmed availability from uncertain or theoretical supply
-- Compare primary, alternate, and transfer options clearly
+- Compare primary, alternate, replacement, transfer, and vendor options clearly
 - Recommend the realistic supply path with risk stated explicitly
 
 Return only a structured output with:
@@ -96,9 +100,9 @@ Return only a structured output with:
 
 ### 7.3 Prompt C — Final Validation and Output Normalization
 ```text
-You are the Inventory Agent for an aircraft AOG recovery workflow.
+You are the Materials & Logistics Agent for an aircraft AOG recovery workflow.
 
-Review the supply recommendation and confirm it aligns with compatibility rules, sourcing constraints, and the output contract expected by Maintenance.
+Review the supply recommendation and confirm it aligns with compatibility rules, sourcing constraints, and the output contract expected by Maintenance and the Controller.
 
 Inputs you must assess:
 - Material recommendation
@@ -108,7 +112,7 @@ Inputs you must assess:
 Decision rules:
 - Ensure the output is grounded in evidence and clearly bounded
 - Reject unsupported assumptions or hidden supplier promises
-- Normalize the result into the standard inventory format
+- Normalize the result into the standard materials and logistics format
 
 Return only a structured output with:
 1. final_summary
@@ -120,14 +124,29 @@ Return only a structured output with:
 ## 8. Expected Output Standard Format
 ```json
 {
-  "agent_name": "Inventory Agent",
+  "agent_name": "Materials & Logistics Agent",
   "availability_status": "available|limited|unavailable|uncertain",
   "summary": "Short summary of current material readiness",
   "sourcing_path": {
     "primary": "Primary source or stock location",
     "alternate": "Alternate or backup option",
+    "method": "internal_transfer|vendor_purchase|borrow|expedite",
     "transfer_required": true
   },
+  "replacement_comparison": [
+    {
+      "part_number": "P-110",
+      "role": "failed_part",
+      "available_quantity": 0,
+      "lead_time_hours": 0
+    },
+    {
+      "part_number": "P-120",
+      "role": "preferred_replacement",
+      "available_quantity": 0,
+      "lead_time_hours": 0
+    }
+  ],
   "stock_per_station": [
     {
       "station": "MIA",
@@ -162,25 +181,26 @@ Return only a structured output with:
 - Check minimum availability thresholds
 - Apply part substitution and sourcing rules
 - Detect missing inventory or location inconsistencies
-- Calculate expected lead times from structured data
+- Calculate expected lead times, shipping transit times, and ETA from structured data
+- Compare the failed part and any preferred replacement part on availability, lead time, and location
 
 ### 8.1 MCP Configuration for Deterministic Validation
-The Inventory Agent uses MCP-connected tools to perform deterministic validation of stock and sourcing data before the model interprets anything.
+The Materials & Logistics Agent uses MCP-connected, read-only tools to perform deterministic validation of stock, sourcing, and shipping data before the model interprets anything.
 
 - `lookup_part_availability`: checks current stock counts, location-level availability, and part status
 - `validate_minimum_thresholds`: compares available inventory against configured minimum service thresholds
 - `apply_substitution_rules`: ensures compatibility rules and alternate-part logic are evaluated deterministically
 - `check_location_consistency`: detects missing inventory records, duplicate locations, or mismatched station data
-- `calculate_lead_time`: computes expected delivery windows from structured stock and transfer data
+- `calculate_lead_time`: computes expected delivery windows, including shipping transit time, from structured stock and transfer data
 
 ### 8.2 Domain APIs Reached through MCP Tools
-The Inventory Agent depends on APIs that provide reliable material facts and constraint data:
+The Materials & Logistics Agent depends on read-only APIs that provide reliable material facts and constraint data:
 
 - Inventory Management API: returns stock quantities, station stock, and current part availability
 - Warehouse / Transfer API: provides transfer records, movement status, and location consistency details
 - Alternate Parts Catalog API: validates substitution options and compatibility metadata
-- Supplier / Procurement API: returns lead times, shipment constraints, and source readiness information
-- Logistics Routing API: helps determine the realistic sourcing path for urgent material fulfillment
+- Supplier / Procurement API: returns vendor lead times, shipment constraints, and source readiness information
+- Logistics Routing API: determines the realistic shipping and sourcing path for urgent material fulfillment
 
 ### 8.3 Tool Interaction Contract (JSON)
 Each tool call performs a deterministic validation step and returns a structured material fact set that can be safely passed to the LLM.
@@ -300,60 +320,63 @@ Response JSON:
 ## 10. LLM-Facing Inputs
 These are the curated, validated facts the LLM should reason over to evaluate material readiness. This is the evidence set derived from the deterministic tool checks and not a raw system dump.
 - Part number, specification, and usage context
+- Failure context, recurring-failure history, and preferred replacement part shared by Maintenance
 - Stock quantity, location, and current availability
-- Alternate part mappings and substitution suitability
-- Supplier or station readiness notes and constraints
-- Lead time and transfer assumptions for the shipment path
+- Alternate and approved-substitute part mappings and suitability
+- Supplier, vendor, or station readiness notes and constraints
+- Lead time, shipping, and transfer assumptions for the shipment path
 
 ## 11. Tool / External System Inputs
-This is the upstream evidence handshake: the machine-readable inventory and supply facts collected through MCP tools and domain APIs before the model reasons.
+This is the upstream evidence handshake: the machine-readable inventory, supply, and logistics facts collected through MCP tools and domain APIs before the model reasons.
 - Inventory and warehouse service data
 - Stock movement and transfer records
-- Supplier and station availability feeds
+- Supplier, vendor, and station availability feeds
 - Alternate-part catalog and compatibility metadata
-- Procurement or logistics workflow data
+- Procurement, shipping, and logistics workflow data
 
 ## 12. LLM-Facing Outputs
 These are the outputs the LLM should produce as reasoning and recommendation artifacts after it has evaluated the curated data:
 - Part availability status
-- Alternate sourcing recommendation
-- Lead-time estimate and supply risk summary
+- Alternate, substitute, or replacement sourcing recommendation
+- Lead-time and ETA estimate and supply risk summary
 - Material readiness verdict
-- Recommended sourcing path under urgency constraints
+- Recommended sourcing and shipping path under urgency constraints
 
 ## 13. Tool / External System Outputs
-This is the downstream handoff to Maintenance: the structured result generated after the recommendation is accepted and translated into machine-usable material-readiness information.
+This is the downstream handoff to Maintenance and the Controller: the structured result generated after the recommendation is accepted and translated into machine-usable material-readiness information.
 - Material readiness status payload
-- Procurement or transfer task recommendation
+- Procurement or transfer task recommendation (advisory only; no operational action is performed)
 - Supplier escalation record if necessary
 - Risk flag for missing or uncertain inventory data
-- Decision summary, including parts-ready ETA and confidence, returned to Maintenance
+- Decision summary, including parts-ready ETA and confidence, returned to Maintenance and recorded in the case context
 
 ### Handshake Chain
-Maintenance (H3) -> Inventory Agent -> Maintenance (H4)
+Maintenance (H3) <-> Materials & Logistics Agent (H4), recorded in the Controller case context
 
-The Inventory Agent reasons from verified inventory evidence and returns its material-readiness results to Maintenance; Maintenance combines the parts-ready ETA with repair duration.
+Worked example: Maintenance reports that Hydraulic Pump P-110 failed, that a similar failure occurred 3 times in 90 days, and that engineering notes recommend the upgraded P-120. The Materials & Logistics Agent evaluates P-110 availability, P-120 availability, lead times, inventory locations, and transfer options before responding with a replacement-strategy comparison. Maintenance combines the parts-ready ETA with repair duration.
 
 ## 13. Validation and Output Evaluation
-The Inventory Agent should confirm:
+The Materials & Logistics Agent should confirm:
 - whether the part is truly available or only theoretically available
-- whether alternate sources are acceptable for the aircraft configuration
+- whether alternate, substitute, or preferred replacement parts are acceptable for the aircraft configuration
 - whether the part can be delivered within the needed time window
 - whether the recommendation is realistic under operational pressure
 
 ## 14. Questions This Agent Seeks to Answer
-- Is the required part available right now?
-- Can it be transferred or sourced elsewhere?
-- How long will that take?
-- Is an alternate replacement feasible without increasing risk?
+- Do we have the part?
+- Are there approved alternatives, and where are the parts?
+- Can inventory be transferred?
+- How fast can it be delivered?
+- What is the best sourcing strategy?
 - Which material path best supports the preferred recovery option?
 
 ## 15. Acceptance Criteria
-The Inventory Agent is successful when it:
+The Materials & Logistics Agent is successful when it:
 - distinguishes actual availability from theoretical availability
-- provides a practical sourcing path for the required materials
+- provides a practical sourcing, shipping, and ETA plan for the required materials
+- evaluates both the failed part and the preferred replacement when Maintenance supplies one
 - identifies risk or delay early enough for decision-making
 - supports a realistic recovery plan instead of a purely ideal one
 
 ## 16. Draft Notes
-This agent is essential when the aircraft is technically repairable but the part is the bottleneck. Its value is in materially grounded decision support for urgent recovery actions.
+This agent is essential when the aircraft is technically repairable but the part is the bottleneck. Its value is in materially grounded decision support for urgent recovery actions. It combines the former Inventory and Logistics scope per ADR-001; if scale requires it, these can be separated into independent agents in a future release.

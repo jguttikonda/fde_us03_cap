@@ -30,7 +30,7 @@ Every proposal must include the following sections in order:
 ```md
 # [Agent Name] Proposal Draft
 
-This document is a detailed draft for the [Agent Name] and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the [Agent Name] and supplements the root system proposal in ../proposal.md.
 
 ## 1. Purpose
 Describe the specific objective of the agent.
@@ -39,7 +39,7 @@ Describe the specific objective of the agent.
 Explain where the agent sits in the overall workflow and how it contributes to the recovery process.
 
 ## 2A. Handshake with Other Agents
-- Agent type: [top-level agent or sub-agent]
+- Agent type: [top-level agent; note any peer collaboration, e.g. Maintenance <-> Materials & Logistics]
 - Called by: [calling agent(s) and handshake ID(s), or None]
 - Calls: [called agent(s) and handshake ID(s), or None]
 - Payload in and out: [what this agent receives and returns, with handshake ID(s)]

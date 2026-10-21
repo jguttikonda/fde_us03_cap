@@ -1,6 +1,6 @@
 # Operations Agent Proposal Draft
 
-This document is a detailed draft for the Operations Agent and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the Operations Agent and supplements the root system proposal in ../proposal.md.
 
 ## 0. Shared Contract Reference
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
@@ -89,7 +89,7 @@ Use the grounded operational evidence from Prompt A to compare feasible recovery
 
 Inputs you must assess:
 - Affected routes and current fleet capacity
-- Maintenance, inventory, and customer-priority constraints
+- Maintenance, materials and logistics, and customer-priority constraints
 - Affected package manifests, service levels, and sort and cut-off windows
 - Recovery options already under consideration
 

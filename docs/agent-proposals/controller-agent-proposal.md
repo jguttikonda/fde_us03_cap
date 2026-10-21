@@ -1,6 +1,6 @@
 # Controller Agent Proposal Draft
 
-This document is a detailed draft for the Controller Agent and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the Controller Agent (Recovery Coordinator) and supplements the root system proposal in ../proposal.md.
 
 ## 0. Shared Contract Reference
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
@@ -20,7 +20,7 @@ The Controller Agent is not a domain specialist. It is the workflow director tha
 - Event intake and validation
 - Case triage and routing
 - Shared context management
-- Coordination across the maintenance, inventory, and operations branches
+- Coordination across the maintenance, materials and logistics, and operations branches
 - Final recommendation synthesis
 - Deterministic final report assembly (ranking, templating, confidence labelling) using fixed rules, see Section 9C
 - Human handoff and escalation logic
@@ -78,7 +78,7 @@ Using the grounded case state, decide which recovery path is most credible and w
 
 Inputs you must assess:
 - Maintenance findings
-- Inventory readiness findings
+- Materials and logistics readiness findings
 - Operations impact assessment
 - Human approval constraints
 
@@ -126,7 +126,7 @@ Return only a structured output with:
   "agent_name": "Controller Agent",
   "case_status": "active|resolved|escalated",
   "summary": "Short narrative of the current AOG decision context",
-  "relevant_agents": ["Maintenance Agent", "Inventory Agent", "Operations Agent"],
+  "relevant_agents": ["Maintenance Agent", "Materials & Logistics Agent", "Operations Agent"],
   "key_findings": [
     "Finding 1",
     "Finding 2"
@@ -178,7 +178,7 @@ This policy ensures the final decision remains explainable, auditable, and opera
 ## 9B. Fallback Handling for Partial Agent Failures
 When one of the specialist agents cannot complete its analysis, the Controller should keep the case moving without pretending the result is fully complete.
 
-- Inventory API unavailable: use cached inventory data, reduce confidence, and mark the recommendation as risk-adjusted
+- Materials & Logistics API unavailable: use cached inventory, vendor, and shipping data, reduce confidence, and mark the recommendation as risk-adjusted
 - Operations API timeout: continue with the remaining agents and include a clear warning in the final brief
 - Maintenance and Operations disagree materially: escalate the case because the conflict affects the overall recommendation
 - Missing required inputs: do not assume a route; return the case to the human approver with the missing-data list
@@ -186,7 +186,7 @@ When one of the specialist agents cannot complete its analysis, the Controller s
 The Controller should always preserve a traceable explanation of what was missing, what was substituted, and what remains uncertain.
 
 ## 9C. Deterministic Final Report Assembly
-The Controller builds the final recovery recommendation report itself. There is no separate Report Creation Agent. Assembly is rule-based and repeatable: the same inputs always produce the same ranked report.
+The Controller builds the final recovery recommendation report itself. There is no separate Recommendation or Report Creation Agent (see ADR-001 in ../proposal.md). Assembly is rule-based and repeatable: the same inputs always produce the same ranked report.
 
 Steps:
 1. Completeness check: the Maintenance output (return-to-service ETA, risk metrics, confidence) and the Operations output (affected flights, affected packages when provided, swap options) must both be present. If one is missing, apply Section 9B and mark the report provisional.
@@ -216,7 +216,7 @@ Advisory only. Human approval is required before any action.
 The Controller Agent relies on a narrow MCP tool layer to carry out the deterministic checks that must happen before reasoning begins. These tools are configured as reusable validation adapters and are not used to replace domain judgment.
 
 - `validate_case_schema`: verifies required event fields, aircraft identifiers, and incident metadata before a case is routed
-- `check_required_sources`: confirms the connected sources for maintenance, inventory, and operations are available and healthy
+- `check_required_sources`: confirms the connected sources for maintenance, materials and logistics, and operations are available and healthy
 - `route_case_policy`: applies the deterministic routing rules to decide which specialist agents are required
 - `enforce_approval_gate`: checks escalation thresholds and human-approval constraints before finalization
 - `standardize_case_output`: converts validated results into the shared controller result schema used across the workflow
@@ -226,7 +226,7 @@ These deterministic checks are executed through MCP-connected tools that call th
 
 - AOG Event Intake API: receives the aircraft incident payload and validates required case metadata
 - Maintenance Status API: confirms aircraft and work-order data is present before routing the case
-- Inventory Availability API: verifies whether part-source data is connected and complete enough to support downstream analysis
+- Materials & Logistics Availability API: verifies whether part-source and shipping data is connected and complete enough to support downstream analysis
 - Flight Operations API: checks whether schedule and fleet inputs are present for risk and disruption evaluation
 - Governance / Approval API: enforces approval gating, escalation thresholds, and policy enforcement rules
 
@@ -264,7 +264,7 @@ Request JSON:
 ```json
 {
   "case_id": "AOG-2026-1001",
-  "source_types": ["maintenance", "inventory", "operations", "approval"],
+  "source_types": ["maintenance", "materials_logistics", "operations", "approval"],
   "required_status": "healthy"
 }
 ```
@@ -274,7 +274,7 @@ Response JSON:
 {
   "source_status": {
     "maintenance": "healthy",
-    "inventory": "healthy",
+    "materials_logistics": "healthy",
     "operations": "healthy",
     "approval": "healthy"
   },
@@ -291,7 +291,7 @@ Request JSON:
   "event_type": "AOG",
   "domain_signals": {
     "maintenance": true,
-    "inventory": true,
+    "materials_logistics": true,
     "operations": true
   }
 }
@@ -301,7 +301,7 @@ Response JSON:
 ```json
 {
   "routing_decision": {
-    "required_agents": ["Maintenance Agent", "Inventory Agent", "Operations Agent"],
+    "required_agents": ["Maintenance Agent", "Materials & Logistics Agent", "Operations Agent"],
     "priority": "high",
     "reason": "technical, material, and operational analysis required"
   }
@@ -335,7 +335,7 @@ Request JSON:
 {
   "case_id": "AOG-2026-1001",
   "routing_decision": {
-    "required_agents": ["Maintenance Agent", "Inventory Agent", "Operations Agent"]
+    "required_agents": ["Maintenance Agent", "Materials & Logistics Agent", "Operations Agent"]
   },
   "summary": "Hydraulic leak with part constraint and schedule disruption"
 }
@@ -348,7 +348,7 @@ Response JSON:
   "controller_output": {
     "case_id": "AOG-2026-1001",
     "summary": "Hydraulic leak with part constraint and schedule disruption",
-    "relevant_agents": ["Maintenance Agent", "Inventory Agent", "Operations Agent"]
+    "relevant_agents": ["Maintenance Agent", "Materials & Logistics Agent", "Operations Agent"]
   },
   "schema_version": "v1"
 }
@@ -358,7 +358,7 @@ Response JSON:
 These are the curated, validated facts the LLM should reason over to make coordination decisions. This is the assembled controller view after deterministic checks and specialist outputs have been filtered for relevance.
 - AOG event details and recovery objective
 - Aircraft status and current maintenance context
-- Inventory availability and readiness signals
+- Materials and logistics availability and readiness signals
 - Operational disruption and schedule impact summaries
 - Inter-agent findings and unresolved contradictions
 - Human approval constraints and escalation policy
@@ -367,7 +367,7 @@ These are the curated, validated facts the LLM should reason over to make coordi
 This is the upstream evidence handshake: the structured inputs the agent receives from MCP tools or system integrations before the LLM reasons over the case.
 - Event payload from operations or monitoring systems
 - Maintenance work-order and aircraft status APIs
-- Inventory service data for parts and stock status
+- Inventory, vendor, and shipping service data for parts, stock status, and ETA
 - Flight schedule and fleet disruption feeds
 - Audit, approval, or governance system metadata
 
@@ -417,4 +417,4 @@ The Controller Agent is successful when it:
 - supports human approval rather than bypassing it
 
 ## 16. Draft Notes
-This agent is the coordination layer, not the technical decision-maker. Its core value is structured orchestration and clear, rule-based reporting: the final ranked report is assembled deterministically by the Controller (Section 9C), not by a separate Report Creation Agent.
+This agent is the coordination layer, not the technical decision-maker. Its core value is structured orchestration and clear, rule-based reporting: the final ranked report is assembled deterministically by the Controller (Section 9C), not by a separate Recommendation or Report Creation Agent.
