@@ -22,6 +22,10 @@ class ToolName(StrEnum):
     MAINTENANCE_RECORDS = "maintenance_records"
     PART_INVENTORY = "part_inventory"
     OPERATIONS_STATUS = "operations_status"
+    FLIGHT_SCHEDULE = "flight_schedule"
+    FLEET_AVAILABILITY = "fleet_availability"
+    PACKAGE_LOAD = "package_load"
+    ALTERNATE_FLIGHTS = "alternate_flights"
 
 
 class ToolRequest(ContractModel):
