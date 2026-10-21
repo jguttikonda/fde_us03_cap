@@ -6,7 +6,7 @@ This document is a detailed draft for the Materials & Logistics Agent and supple
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Materials & Logistics Agent determines whether required parts and material are available, evaluates alternate and approved substitute parts, plans realistic sourcing (internal transfer or vendor purchase) and shipping, and calculates the parts-ready ETA. It collaborates directly with the Maintenance Agent as a peer so that the question is not only "Do we have the part?" but "What is the most appropriate replacement strategy given maintenance history and part availability?"
+The Materials & Logistics Agent determines whether required parts and material are available, evaluates alternate and approved substitute parts, plans realistic sourcing (internal transfer or vendor purchase) and shipping, and calculates the parts-ready ETA. It answers whether the part is available locally, at another station, or through a supplier; whether it should be transferred, borrowed, purchased, or expedited; and which approved alternate or engineering-authorized replacements and transport options exist, within inventory, logistics, and approved-part constraints. It collaborates directly with the Maintenance Agent as a peer so that the question is not only "Do we have the part?" but "What is the most appropriate replacement strategy given maintenance history and part availability?"
 
 ## 2. Role in the System
 The Materials & Logistics Agent is a top-level specialist agent called by the Controller and a direct collaboration peer of the Maintenance Agent. Maintenance shares failure context, maintenance history, and any preferred replacement part; this agent evaluates the original and the preferred replacement part (availability, lead time, inventory locations, transfer options, shipping) before responding. Every exchange with Maintenance is recorded in the Controller-managed case context. It does not communicate with the Operations Agent directly.
@@ -131,7 +131,15 @@ Return only a structured output with:
     "primary": "Primary source or stock location",
     "alternate": "Alternate or backup option",
     "method": "internal_transfer|vendor_purchase|borrow|expedite",
+    "shipping_source": "fedex_network_priority_freight|fedex_network_courier|commercial_carrier",
+    "estimated_cost_usd": 0,
+    "eta_hours": 0,
     "transfer_required": true
+  },
+  "part_authorization": {
+    "authorized": true,
+    "traceability_verified": true,
+    "checked_by_role": "Materials Inventory Specialist"
   },
   "replacement_comparison": [
     {
@@ -183,7 +191,8 @@ Return only a structured output with:
 - Detect missing inventory or location inconsistencies
 - Calculate expected lead times, shipping transit times, and ETA from structured data
 - Compare the failed part and any preferred replacement part on availability, lead time, and location
-
+- Verify part authorization and traceability (Materials Inventory Specialist check); an unauthorized part makes the option non-compliant
+- Price each sourcing method and shipping source (FedEx network priority freight/courier and commercial carriers, mock cost and ETA) as estimated_cost in USD
 ### 8.1 MCP Configuration for Deterministic Validation
 The Materials & Logistics Agent uses MCP-connected, read-only tools to perform deterministic validation of stock, sourcing, and shipping data before the model interprets anything.
 

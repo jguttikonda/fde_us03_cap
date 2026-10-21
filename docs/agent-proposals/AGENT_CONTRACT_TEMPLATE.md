@@ -146,15 +146,17 @@ Return only a structured output with:
 ```
 
 ## 8. Expected Output Standard Format
+Each agent defines its own role-specific output fields, shaped by its responsibilities and by what its peers need from it (for example, Maintenance returns root cause, ETA and airworthiness status; Materials & Logistics returns sourcing, authorization and cost; Operations returns flight, package and load-redistribution impact). Only the small envelope below is common, so the Controller can validate and trace every result.
 ```json
 {
   "agent_name": "[Agent Name]",
   "status": "active|resolved|uncertain",
   "summary": "Short summary",
-  "key_findings": ["Finding 1"],
+  "confidence": 0.0,
+  "assumptions": ["Assumption 1"],
+  "<role_specific_fields>": "Defined by this agent's responsibilities and the needs of its peers",
   "recommendation": {
-    "decision": "repair|delay|escalate|source|reroute|approve",
-    "confidence": 0.0,
+    "decision": "<value from this agent's own decision set>",
     "reasoning": "Why this recommendation is preferred",
     "next_steps": ["Step 1", "Step 2"]
   }
@@ -271,6 +273,7 @@ Add implementation or design notes relevant to the agent.
 - Do not rename the sections.
 - Keep deterministic and non-deterministic responsibilities explicit.
 - Separate LLM reasoning inputs/outputs from tool and API inputs/outputs.
+- Inputs and outputs (sections 8 and 10-12) are role-specific: define them from this agent's responsibilities and from what its peers (including A2A partners) need from it. Do not copy another agent's fields; only the common envelope in section 8 is shared.
 - Include both validation logic and decision logic.
 - Ensure each agent produces a structured decision artifact for the Controller or for human review.
 

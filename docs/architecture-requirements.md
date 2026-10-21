@@ -17,7 +17,7 @@
 
 This Architecture Requirements Document (ARD) is the authoritative engineering baseline for the Aircraft-On-Ground (AOG) Recovery Coordinator. It converts the project proposal and agent drafts into uniquely identified, testable requirements that OpenSpec proposals, designs, specifications, and tasks must follow.
 
-The system coordinates specialized Maintenance, Materials & Logistics, and Operations agents through a Controller Agent (Recovery Coordinator), for four agents in total. It addresses the business problem that AOG recovery information is distributed across Maintenance, Materials, Logistics, and Operations with no consolidated view. The Controller evaluates recovery options, ranks them, and presents an explainable recommendation to a human decision-maker. It is an advisory system and does not execute operational actions.
+The system coordinates specialized Maintenance, Materials & Logistics, and Operations agents through a Controller Agent (Recovery Coordinator), for four agents in total. It addresses the business problem that AOG recovery information is distributed across Maintenance, Materials, Logistics, and Operations, and that teams must decide which recovery strategy best satisfies maintenance, engineering, part-approval, airworthiness, inventory and logistics, operational (including package-load), and business objectives at once, under time pressure and largely through individual expertise. The Controller evaluates recovery options in parallel, applies a compliance gate, ranks them, and presents an explainable recommendation to human decision-makers who remain accountable for all operational and airworthiness decisions. It is an advisory system and does not execute operational actions.
 
 ## 2. Source Documents and Precedence
 
@@ -391,7 +391,7 @@ Maintenance and the Materials & Logistics Agent MAY collaborate directly as peer
 
 ### ARD-SYS-005 - Recommendation ownership
 
-The Controller MUST own recovery-option comparison, deterministic score calculation, relative ranking, explanation, and decision-brief generation as specified in ARD-CTL-009 through ARD-CTL-016.
+The Controller MUST own recovery-option comparison, deterministic score calculation, relative ranking, explanation, and decision-brief generation as specified in ARD-CTL-009 through ARD-CTL-019.
 
 ### ARD-SYS-006 - Approval ownership
 
@@ -503,16 +503,14 @@ The Controller MUST record a terminal workflow status of resolved, escalated, re
 
 ### ARD-CTL-011 - Scoring model
 
-Each viable recovery option MUST be scored using this baseline weighting:
+Each viable recovery option that passes the compliance gate (ARD-CTL-017) MUST be scored using this baseline weighting:
 
 | Factor | Weight |
 |---|---:|
-| Recovery time | 30% |
-| Operational impact | 25% |
-| Materials and logistics availability | 20% |
-| Maintenance feasibility | 15% |
-| Cost impact | 5% |
-| Risk level | 5% |
+| Recovery speed | 30% |
+| Operational and package impact | 30% |
+| Risk level | 30% |
+| Cost (total estimated_cost in USD, mock) | 10% |
 
 ### ARD-CTL-012 - Deterministic score calculation
 
@@ -533,6 +531,18 @@ When the top recovery options are within 2 percentage points of one another, the
 ### ARD-CTL-016 - Decision brief
 
 The final brief MUST include decision status, summary, ranked options, trade-offs, risks, assumptions, warnings, confidence, required human action, and a concise recommendation narrative. It MUST be understandable to a non-technical operational sponsor while retaining enough evidence for technical review.
+
+### ARD-CTL-017 - Compliance gate
+
+Before scoring, the Controller MUST exclude any option that fails airworthiness or engineering approval (checked by the Maintenance Agent for the Aircraft Maintenance Technician/Engineer) or part authorization and traceability (checked by the Materials & Logistics Agent for the Materials Inventory Specialist). Excluded options MUST be listed with the reason and MUST NOT be ranked.
+
+### ARD-CTL-018 - Candidate options and parallel evaluation
+
+The Controller MUST build candidate options from: repair with original part, repair with preferred or alternate part, aircraft swap, and flight delay. Each candidate MUST be combined with a sourcing method and a load-redistribution plan. Maintenance and Materials & Logistics MUST be evaluated concurrently per candidate; Operations MUST then be evaluated per candidate using the resulting ETA; the Controller MUST then rank.
+
+### ARD-CTL-019 - Cost model
+
+Each option MUST carry a single estimated_cost in USD equal to repair labor plus part, transfer or expedite cost plus delay or swap cost. Cost values are mock data; no real cost API is required.
 
 ## 10. Maintenance Requirements
 
@@ -572,6 +582,10 @@ A material difference between maintenance recovery time and operations disruptio
 
 The Maintenance result MUST identify recurring failures from maintenance history when present, and MUST state any preferred or engineering-recommended replacement part with its supporting history. A preferred replacement MUST be evaluated by the Materials & Logistics Agent before it is recommended (ARD-SYS-004, ARD-MLG-009).
 
+### ARD-MNT-010 - Root cause and operational window
+
+The Maintenance result MUST include root_cause (category, confidence, source evidence), the recurring-failure count, airworthiness and engineering approval status, estimated repair labor cost, and whether the return-to-service ETA meets the need-by time (the next scheduled departure of the affected tail on the AOG event).
+
 ## 11. Materials & Logistics Requirements
 
 ### ARD-MLG-001 - Materials and logistics inputs
@@ -596,7 +610,7 @@ The result MUST identify the primary source, an alternate source when available,
 
 ### ARD-MLG-006 - Materials and logistics output
 
-The result MUST include risk factors, assumptions, recommendation, confidence, reasoning, and next steps.
+The result MUST include risk factors, assumptions, recommendation, confidence, reasoning, and next steps. It MUST also include per-method estimated cost and ETA (FedEx network priority freight or courier, and commercial carriers, mock data) and a part authorization and traceability result (Materials Inventory Specialist check).
 
 ### ARD-MLG-007 - Stale materials and logistics data
 
@@ -626,7 +640,7 @@ The Operations result MUST classify operational impact as low, medium, high, or 
 
 ### ARD-OPS-004 - Recovery alternatives
 
-The Operations Agent MUST evaluate applicable repair, aircraft swap, reroute, and delay options.
+The Operations Agent MUST evaluate applicable repair, aircraft swap, and delay options for each candidate supplied by the Controller.
 
 ### ARD-OPS-005 - Operations output
 
@@ -643,6 +657,10 @@ When multiple feasible options have materially different customer impact, the al
 ### ARD-OPS-008 - Route conflict
 
 A detected route or assignment conflict MUST identify the affected resources and explain why the preferred option is more viable than alternatives.
+
+### ARD-OPS-009 - Package load redistribution
+
+Because the fleet carries package delivery loads, the Operations Agent MUST evaluate redistribution of packages to other flights or spare aircraft within aircraft capacity (by tail), service level, and sort/cut-off windows, using mock package manifest and capacity data. Packages that cannot be protected MUST be reported as unprotected and included in the option's impact and cost.
 
 ## 13. Confidence, Escalation, and Approval Requirements
 
@@ -668,7 +686,7 @@ Missing required input MUST produce a missing-data list and MUST NOT be replaced
 
 ### ARD-GOV-006 - Human actions
 
-The approval workflow MUST support approve, reject, escalate, and request more information.
+The approval workflow MUST support approve, reject, escalate, and request more information. Approval of a recovery plan MUST require both the Ops lead (operational plan) and the Maintenance/airworthiness authority (any repair or part decision).
 
 ### ARD-GOV-007 - Approval record
 

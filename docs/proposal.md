@@ -9,15 +9,16 @@
 
 # 1. Executive Summary
 
-The Aircraft-On-Ground (AOG) Recovery Coordinator is an Agent-to-Agent (A2A) decision-support platform built using Google ADK. Four agents (Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, and Operations Agent) collaborate to identify the recovery strategy that minimizes downtime, operational disruption, business impact, and risk while maintaining safety and compliance.
+The Aircraft-On-Ground (AOG) Recovery Coordinator is an Agent-to-Agent (A2A) decision-support platform built using Google ADK. Four agents (Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, and Operations Agent) collaborate to identify the recovery strategy that best balances recovery speed, operational impact, cost, risk, and compliance (maintenance, engineering, approved-part, and airworthiness requirements).
 
-The goal is to reduce AOG duration and accelerate recovery decisions, improve decision quality, and provide explainable recommendations while keeping the human operator in the loop for final approval. The solution is a decision-support platform, not an autonomous decision-maker.
+The goal is to reduce AOG duration and accelerate recovery decisions, improve decision quality and consistency, and provide explainable recommendations while keeping humans fully accountable for all operational and airworthiness decisions. The solution is a decision-support platform, not an autonomous decision-maker.
 
 The Aircraft-On-Ground Recovery Coordinator uses Agent-to-Agent collaboration across Maintenance, Materials & Logistics, and Operations domains to identify the optimal aircraft recovery strategy, reducing downtime and operational disruption while keeping humans fully in control of operational decisions.
 
 Key goals:
 - Reduce aircraft downtime
-- Improve recovery decision quality
+- Evaluate multiple recovery strategies in parallel against technical, operational, regulatory, and business objectives
+- Improve recovery decision quality and consistency
 - Enable explainable recommendations
 - Demonstrate enterprise-grade multi-agent orchestration
 - Maintain human approval for operational actions
@@ -26,23 +27,44 @@ Key goals:
 
 # 2. Business Problem
 
-When an aircraft becomes **Aircraft-On-Ground (AOG)**, every minute of downtime can impact flight schedules, aircraft utilization, customer commitments, and operational costs.
+Aircraft-On-Ground (AOG) events are among the most operationally disruptive and costly situations faced by Air Operations. As a logistics company, FedEx flights carry package delivery loads, so every AOG event also puts time-definite customer shipments at risk and may force those loads to be redistributed across other flights and aircraft.
 
-Recovering an AOG aircraft requires rapid coordination across multiple business domains, including Maintenance, Materials, Logistics, and Operations. Each team has access to a portion of the information needed to make a recovery decision, but no single system currently provides a consolidated view of the situation.
+When an aircraft becomes AOG, Maintenance, Materials & Logistics, and Operations teams must rapidly determine the most effective recovery strategy while balancing operational urgency, inventory availability, engineering guidance, maintenance requirements, and airworthiness obligations.
 
-As a result, personnel must manually gather information, consult multiple systems, coordinate with stakeholders, evaluate alternatives, and determine the best course of action under significant time pressure.
+Today, the information needed to make these decisions is distributed across multiple systems, records, and business functions. Teams often need to manually gather data, consult subject matter experts, review maintenance history, evaluate parts availability, analyze operational impacts, and determine the most appropriate recovery path under significant time pressure.
 
-Key decisions often include:
-- Can the aircraft be repaired within the required operational window?
-- Are the required parts available locally or at another station?
-- Should a part be transferred, purchased, borrowed, or expedited?
-- Is an aircraft swap a better recovery strategy?
-- What is the impact of each option on downstream flights and network operations?
-- Which option minimizes overall business disruption while maintaining operational compliance?
+The challenge is not simply identifying an available replacement part or repair option. The challenge is determining which recovery strategy best satisfies technical, operational, regulatory, and business objectives simultaneously.
 
-Because these decisions involve competing objectives, changing operational conditions, and information distributed across multiple systems, recovery planning often depends on individual experience and manual coordination.
+## 2.1 Key Recovery Decisions
 
-The organization needs a more intelligent and collaborative decision-support capability that can rapidly evaluate recovery alternatives, provide explainable recommendations, and help reduce aircraft downtime while keeping humans fully in control of operational decisions.
+During an AOG event, teams are typically required to answer critical questions such as:
+- Can the aircraft be repaired within the required operational timeframe?
+- What is the root cause of the failure, and has a similar issue occurred previously?
+- Does maintenance history suggest a preferred repair strategy or replacement component?
+- Are there approved alternate parts or engineering-authorized replacements available?
+- Is the required part available locally, at another station, or through a supplier?
+- Should the part be transferred, borrowed, purchased, or expedited?
+- What transportation or logistics options are available, and what are the expected delivery times?
+- Can another aircraft be substituted to minimize network disruption?
+- What flights, customers, and downstream operations will be impacted by each recovery option?
+- How would the package load on the affected flights be redistributed (to other flights or a substitute aircraft), and which time-critical shipments and service commitments are at risk?
+- Which recovery strategy provides the best balance between recovery speed, operational impact, cost, risk, and compliance?
+
+The challenge is determining which recovery strategy best satisfies:
+- Maintenance requirements
+- Engineering recommendations
+- Approved replacement part standards
+- Airworthiness and regulatory obligations
+- Inventory and logistics constraints
+- Operational recovery objectives
+- Package load redistribution and customer service commitments
+- Business impact considerations
+
+Because these decisions require balancing multiple competing factors, recovery planning often depends heavily on individual expertise and manual coordination.
+
+As operational complexity increases, the time required to evaluate recovery alternatives can extend aircraft downtime, increase operational disruption, and create inconsistent decision-making outcomes.
+
+There is an opportunity to improve this process through an intelligent decision-support capability that can bring together expertise from Maintenance, Materials & Logistics, and Operations, evaluate multiple recovery strategies in parallel, and provide explainable recommendations that help teams make faster and better-informed recovery decisions while ensuring humans remain fully accountable for all operational and airworthiness decisions.
 
 ---
 
@@ -50,8 +72,11 @@ The organization needs a more intelligent and collaborative decision-support cap
 
 Benefits:
 - Faster recovery decisions
+- More consistent decisions that depend less on individual expertise and manual coordination
 - Reduced aircraft downtime
+- Visibility of engineering guidance, approved alternates, and airworthiness constraints alongside parts and operational impact
 - Improved fleet utilization
+- Protected package service commitments through visibility into load redistribution impact
 - Better parts visibility across stations and vendors
 - Clearer trade-off analysis across recovery options
 - Explainable decision support for human operators
@@ -66,15 +91,16 @@ Deterministic systems typically follow rules such as:
 IF part available THEN repair
 ```
 
-Agentic systems evaluate multiple operational paths, including:
+Agentic systems evaluate multiple operational paths. The Controller builds candidate recovery strategies, each combining a repair or aircraft choice, a sourcing method, and a package load-redistribution plan:
 
 ```text
-Repair Now
-Transfer Part
+Repair with original part
+Repair with preferred/alternate part (for example P-120)
 Swap Aircraft
 Delay Flight
-Use Alternate Recovery Plan
 ```
+
+Each candidate is first passed through a compliance gate and then ranked on a weighted score (recovery speed 30%, operational/package impact 30%, risk 30%, cost 10%).
 
 The system recommends the best option based on evidence rather than a single hard-coded rule.
 
@@ -83,7 +109,9 @@ The system recommends the best option based on evidence rather than a single har
 These responsibilities are best handled by deterministic logic because they are rule-based and objective:
 
 - Input validation and required-field checks
-- Part availability checks against inventory thresholds
+- Part availability and approved-part authorization checks against inventory thresholds
+- Package capacity, sort, and cut-off window checks for load redistribution
+- Compliance gate: exclusion of options that fail airworthiness, engineering approval, or part authorization/traceability checks
 - Basic schedule conflict detection
 - Minimum safety and approval gate checks
 - Standard workflow routing and escalation rules
@@ -95,10 +123,13 @@ These responsibilities require judgment, contextual reasoning, and trade-off ana
 
 - Assessing repairability under uncertain maintenance conditions
 - Interpreting partial aircraft history and operational constraints
-- Evaluating trade-offs between downtime, cost, and flight disruption
+- Evaluating trade-offs between downtime, cost, risk, and flight and package disruption
+- Deciding how to redistribute package load when alternate capacity is limited
 - Prioritizing among multiple recovery options with incomplete certainty
 - Explaining recommendations in human-understandable terms
 - Recommending a coordinated plan across maintenance, materials and logistics, and operations
+
+Recovery options are ranked with a compliance gate (non-compliant options are excluded) followed by a weighted score (recovery speed 30%, operational/package impact 30%, risk 30%, cost 10%). Cost is a mock estimated_cost in USD per option (repair labor + part/transfer/expedite cost + delay/swap cost).
 
 ## 4.3 Why Deterministic Logic Cannot Fully Replace the Agents
 
@@ -107,6 +138,8 @@ A deterministic engine is useful for guardrails, validation, and workflow enforc
 - A part may be available but still not feasible because of lead time, certification, or maintenance constraints.
 - The aircraft may be repairable but not the best option if the schedule impact is severe.
 - A substitute aircraft may exist but may create operational or customer disruption elsewhere.
+- A recovery option may be fast but infeasible if the displaced package load cannot fit on other flights or aircraft before cut-off.
+- A part may be available but unusable if it is not an approved or traceable replacement.
 - The best recommendation depends on balancing technical feasibility, material readiness, and operational impact together.
 
 For these reasons, deterministic logic should be used for validation and enforcement, while the agentic layer is used for reasoning, prioritization, and recommendation generation. This division preserves reliability while still enabling judgment-based decision support.
@@ -188,6 +221,7 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 - Apply standard safety and approval checks
 - Structure repair options into clear technical categories
 - Count recurring failures of the same part within a defined window
+- Check airworthiness and engineering approval status (Aircraft Maintenance Technician/Engineer sign-off) for each repair path
 
 ### 6.6 Non-Deterministic Responsibilities
 - Assess whether the aircraft is truly repairable under uncertain technical conditions
@@ -201,7 +235,8 @@ The Maintenance LLM acts as the aircraft technical analyst. It interprets mainte
 - Is the aircraft repairable in the current maintenance context?
 - What inspection, parts, and labor are required for repair?
 - How long will the aircraft need to remain grounded for maintenance?
-- What failed, and has it happened before?
+- What failed, what is the root cause, and has it happened before?
+- Can the aircraft be repaired before the need-by time on the AOG event?
 - Which repair strategy worked previously, and are alternate parts recommended?
 - What technical risks or constraints could affect the recovery option?
 - What is the confidence level in the technical recommendation and what assumptions drive it?
@@ -216,6 +251,8 @@ The Materials & Logistics LLM acts as the materials readiness and sourcing speci
 - Validate part number, location, quantity, and stock thresholds
 - Check current availability against minimum requirements
 - Match approved substitute or alternate part candidates using defined business rules
+- Check part authorization and traceability (Materials Inventory Specialist (MIS) validation) before a part is offered
+- Estimate cost and ETA per sourcing method (transfer, purchase, borrow, expedite) and shipping source (FedEx network or commercial carrier)
 - Route sourcing decisions to the correct transfer, vendor, or procurement path
 - Compute expected lead times, shipping durations, ETAs, and material readiness status from structured data
 
@@ -235,7 +272,7 @@ The Materials & Logistics LLM acts as the materials readiness and sourcing speci
 - What is the best sourcing strategy to meet the recovery deadline with acceptable risk?
 
 ## Operations Agent
-The Operations Agent evaluates the larger business impact of the AOG event, including schedule and substitution implications. It assesses how the recovery path affects operations and customer impact.
+The Operations Agent evaluates the larger business impact of the AOG event, including schedule, substitution, and package load redistribution implications. It assesses how the recovery path affects operations, package service commitments, and customer impact.
 
 ### 6.12 LLM Role
 The Operations LLM acts as the disruption and prioritization analyst. It interprets flight schedules, fleet constraints, and route dependencies to determine which recovery option minimizes operational disruption while remaining feasible.
@@ -244,6 +281,7 @@ The Operations LLM acts as the disruption and prioritization analyst. It interpr
 - Validate flight and schedule data relevant to the AOG event
 - Detect route conflicts, aircraft assignment conflicts, and disruption triggers
 - Evaluate standard substitution and re-accommodation rules
+- Check aircraft capacity and package sort and cut-off windows when redistributing load
 - Assess aircraft availability and fleet utilization
 - Apply business priority logic and threshold-based impact checks
 - Produce consistent operational impact summaries
@@ -252,6 +290,7 @@ The Operations LLM acts as the disruption and prioritization analyst. It interpr
 - Determine which disruption pattern is most damaging under uncertain schedule conditions
 - Assess whether a swap, reroute, or delay is the least-bad recovery option
 - Weigh customer impact, crew constraints, and fleet optimization trade-offs
+- Evaluate package load redistribution: which packages can move to other flights or a substitute aircraft within capacity, sort, and cut-off windows, and which time-critical shipments remain at risk
 - Recommend operational sequencing under incomplete real-time conditions
 - Prioritize among multiple plausible recovery paths when the numbers alone are not decisive
 
@@ -261,6 +300,7 @@ The Operations LLM acts as the disruption and prioritization analyst. It interpr
 - What is the operational cost of delay, reroute, or recovery action?
 - Which recovery path minimizes business disruption while remaining feasible?
 - What is the impact on customer commitments, schedule reliability, and aircraft utilization?
+- How should the package load be redistributed across other flights or aircraft, and what service commitments remain at risk?
 
 ### 6.16 Design Principle for All Agents
 Each agent should be built around the same pattern:
@@ -305,9 +345,10 @@ The Controller Agent is responsible for shared context coordination, task routin
 Controller responsibilities:
 - Receive validated AOG input
 - Maintain shared coordination context
-- Route tasks to the relevant agents
+- Build candidate recovery options (repair with original part, repair with preferred/alternate part, swap aircraft, delay flight), each with a sourcing method and a load-redistribution plan
+- Route tasks to the relevant agents: Maintenance and Materials & Logistics run concurrently per candidate, then Operations runs per candidate using the ETA
 - Aggregate intermediate outputs
-- Evaluate alternatives, compare trade-offs, and rank options
+- Apply the compliance gate (exclude non-compliant options), then compare trade-offs and rank on the weighted score
 - Generate the final recovery plan and report for human review
 
 ## 7.2 Maintenance and Materials & Logistics Agent Architecture (Peer A2A Collaboration)
@@ -383,11 +424,13 @@ flowchart LR
     OOut --> Controller[Controller Agent]
 ```
 
-The Operations Agent focuses on schedule and fleet impact. It validates the request, evaluates operational disruption and substitution options, and checks the output quality before returning the result to the Controller.
+The Operations Agent focuses on schedule, fleet, and package load impact. It validates the request, evaluates operational disruption, substitution options, and package load redistribution (within aircraft capacity and sort and cut-off windows, with the remainder reported as unprotected), and checks the output quality before returning the result to the Controller. It runs once per candidate recovery option, using the repair or parts-ready ETA from Maintenance and Materials & Logistics.
 
 Operations-specific elements:
 - Flight and route impact analysis
 - Fleet and schedule context
+- Package manifests, aircraft capacity, and cut-off windows for load redistribution
+- Operational and delay/swap cost estimate
 - Operational risk framing
 - Input validation before reasoning
 - Output evaluation before handoff
@@ -411,18 +454,21 @@ This structure keeps the solution readable and aligned with the image while maki
 
 ```mermaid
 sequenceDiagram
-User->>Controller: Analyze AOG Event
-Controller->>Maintenance: Assess failure and repairability
-Controller->>MaterialsLogistics: Assess sourcing and logistics
+User->>Controller: Analyze AOG Event (with need-by time)
+Controller->>Controller: Build candidate recovery options
+par Maintenance and Materials & Logistics run concurrently
+Controller->>Maintenance: Assess failure, root cause, repairability, airworthiness approval
+Controller->>MaterialsLogistics: Assess sourcing, authorization, and logistics
+end
 Maintenance->>MaterialsLogistics: Failure history, P-110 failed 3x in 90 days, P-120 recommended
-MaterialsLogistics-->>Maintenance: P-110/P-120 availability, lead times, locations, transfer options
-Maintenance-->>Controller: ETA, risk metrics, preferred replacement
-MaterialsLogistics-->>Controller: Sourcing strategy and ETA
-Controller->>Operations: Evaluate schedule and operational impact
-Operations-->>Controller: Flight impact, swap options
-Controller->>Controller: Evaluate, compare, rank options using deterministic rules
+MaterialsLogistics-->>Maintenance: P-110/P-120 availability, lead times, locations, transfer options, cost
+Maintenance-->>Controller: ETA, risk metrics, root cause, preferred replacement, compliance status
+MaterialsLogistics-->>Controller: Sourcing strategy, ETA, cost, authorization status
+Controller->>Operations: Evaluate each candidate using the ETA
+Operations-->>Controller: Flight impact, swap options, package load redistribution, cost
+Controller->>Controller: Compliance gate, then weighted ranking using deterministic rules
 Controller-->>User: Final recovery recommendation for human review
-User->>Controller: Human review and approval
+User->>Controller: Human review and approval (Ops lead plus Maintenance/airworthiness authority)
 ```
 
 ---
@@ -451,6 +497,18 @@ The merged design adopts the best validation examples from Unit B while preservi
 - Input: Hydraulic Pump P-110 failed; similar failure 3 times in 90 days; engineering notes recommend upgraded P-120; P-110 in stock locally, P-120 only at another station
 - Expected result: Maintenance and Materials & Logistics exchange the failure history and availability, the P-110 versus P-120 comparison (availability, lead time, location, transfer) is recorded in the case context, and the Controller presents both strategies with trade-offs
 
+## Test Case 6 (Package load redistribution)
+- Input: The affected flight carries 1,200 packages (700 priority); a spare aircraft has capacity for 900; the sort cut-off is 17:30
+- Expected result: Operations redistributes up to the spare aircraft's capacity within the cut-off, prioritizing priority packages, reports the remaining packages as unprotected, and the Controller includes that impact in the ranking
+
+## Test Case 7 (Compliance gate)
+- Input: Preferred part P-120 lacks authorization or traceability, or the repair path lacks engineering approval
+- Expected result: The option is excluded by the Controller before ranking, with the reason shown in the report
+
+## Test Case 8 (Weighted ranking with cost)
+- Input: Two compliant options where the cheaper option has the longer recovery time
+- Expected result: The weighted score (speed 30%, impact 30%, risk 30%, cost 10%) decides the order, and the cost trade-off is explained
+
 ## Scenario: Conflicting Data
 - Maintenance estimates 3 hours while Operations indicates 7 hours
 - Controller flags the conflict
@@ -464,10 +522,10 @@ These cases ensure the system remains not only architecture-driven, but also tes
 
 | Agent | Functional Focus |
 |---------|------------------|
-| Controller (Recovery Coordinator) | Case context, routing, option comparison and ranking, recommendation and report assembly |
-| Maintenance | Work orders, maintenance records, repair feasibility, failure history |
-| Materials & Logistics | Parts inventory, alternate parts, transfer and vendor sourcing, shipping and ETA, material readiness |
-| Operations | Flight schedules, route impact, aircraft substitution |
+| Controller (Recovery Coordinator) | Case context, routing, candidate option construction, compliance gate, weighted ranking (speed 30%, operational/package impact 30%, risk 30%, cost 10%), recommendation and report assembly |
+| Maintenance | Work orders, maintenance records, root cause, repair feasibility, failure history, airworthiness/engineering approval status, repair labor cost |
+| Materials & Logistics | Parts inventory, alternate parts, part authorization and traceability, transfer and vendor sourcing, shipping (FedEx network and commercial carriers) with cost and ETA, material readiness |
+| Operations | Flight schedules, route impact, aircraft substitution, aircraft capacity, package manifests, sort and cut-off windows, package load redistribution, delay and swap cost |
 
 ---
 
@@ -488,7 +546,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 - Advisory only
 - Human approval required
 - Explainable outputs
-- Compliance validation before a recommendation is presented
+- Compliance validation before a recommendation is presented: the Aircraft Maintenance Technician/Engineer checks airworthiness and engineering approval, the Materials Inventory Specialist (MIS) checks part authorization and traceability, and the Controller excludes any non-compliant option before ranking
 - Operational safeguards
 - Clear decision rationale
 
@@ -499,7 +557,7 @@ These cases ensure the system remains not only architecture-driven, but also tes
 ```text
 AI Recommendation
     ↓
-Human Review
+Human Review (Ops lead for the operational plan; Maintenance/airworthiness authority for any repair or part decision; both required)
     ↓
 Human Approval
     ↓
@@ -516,6 +574,8 @@ The solution is intended to help air operations teams act faster when time-sensi
 
 Expected impact:
 - Faster AOG response
+- More consistent, explainable decisions with airworthiness accountability retained by humans
+- Protected package service commitments through load redistribution analysis
 - Better resource prioritization
 - More consistent decision-making
 - Greater visibility across teams

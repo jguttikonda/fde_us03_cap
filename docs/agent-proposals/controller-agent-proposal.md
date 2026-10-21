@@ -6,7 +6,7 @@ This document is a detailed draft for the Controller Agent (Recovery Coordinator
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Controller Agent is the orchestration layer for the AOG recovery workflow. It receives the incoming aircraft ground event, determines which specialist agents are required, coordinates the information flow, and produces the final recommendation for human approval. It addresses the business problem that no single system gives a consolidated view of an AOG event: the Controller gathers the partial views held by Maintenance, Materials, Logistics, and Operations into one explainable decision package, replacing manual coordination under time pressure.
+The Controller Agent is the orchestration layer for the AOG recovery workflow. It receives the incoming aircraft ground event, determines which specialist agents are required, coordinates the information flow, and produces the final recommendation for human approval. It addresses the business problem that AOG recovery information is distributed across systems and functions and that the best strategy must satisfy technical, operational, regulatory, and business objectives simultaneously: the Controller gathers the views of Maintenance, Materials & Logistics, and Operations, evaluates multiple recovery strategies in parallel, and ranks them on recovery speed, operational impact, cost, risk, and compliance in one explainable decision package. Humans remain fully accountable for all operational and airworthiness decisions. Package load redistribution analysis is owned by the Operations Agent and is a ranking input alongside the other agents' findings.
 
 ## 2. Role in the System
 The Controller Agent is not a domain specialist. It is the workflow director that:
@@ -134,16 +134,22 @@ Return only a structured output with:
   "ranked_options": [
     {
       "rank": 1,
-      "option": "repair|substitute|transfer|delay|escalate",
+      "option": "repair_original|repair_alternate|swap|delay|escalate",
+      "sourcing_method": "internal_transfer|vendor_purchase|borrow|expedite|none",
       "return_to_service_hours": 0.0,
       "affected_flights": ["Flight 1"],
-      "affected_packages": {"total": 0, "priority": 0},
+      "affected_packages": {"total": 0, "priority": 0, "unprotected": 0},
+      "estimated_cost_usd": 0,
+      "score": 0.0,
       "risk_metrics": ["Metric 1"],
       "trade_off": "One sentence built from the fields above"
     }
   ],
+  "excluded_options": [
+    {"option": "repair_alternate", "reason": "Part authorization or traceability check failed"}
+  ],
   "recommended_recovery_path": {
-    "option": "repair|substitute|transfer|delay|escalate",
+    "option": "repair_original|repair_alternate|swap|delay|escalate",
     "confidence": 0.0,
     "rationale": "Why this option is preferred",
     "assumptions": ["Assumption 1", "Assumption 2"],
@@ -160,8 +166,9 @@ Return only a structured output with:
 - Apply workflow routing rules
 - Enforce escalation thresholds and approval gates
 - Standardize output schema and final summary structure
-- Check that the Maintenance output (ETA and risk metrics) and the Operations output are both present before a report is built
-- Rank the recovery options with a written, fixed scoring rule (Section 9C)
+- Check that the Maintenance, Materials & Logistics, and Operations outputs (including cost and compliance status) are all present before a report is built
+- Exclude options that fail the compliance gate (airworthiness/engineering approval, part authorization and traceability)
+- Rank the recovery options with a written, fixed scoring rule after the compliance gate (Section 9C)
 - Apply the final report template: option, time back in service, affected flights and packages, risk metrics, trade-off, assumptions, confidence label
 - Assign status categories (feasible, high-risk, deferred) and apply the confidence thresholds in Section 9A
 
@@ -189,12 +196,13 @@ The Controller should always preserve a traceable explanation of what was missin
 The Controller builds the final recovery recommendation report itself. There is no separate Recommendation or Report Creation Agent (see ADR-001 in ../proposal.md). Assembly is rule-based and repeatable: the same inputs always produce the same ranked report.
 
 Steps:
-1. Completeness check: the Maintenance output (return-to-service ETA, risk metrics, confidence) and the Operations output (affected flights, affected packages when provided, swap options) must both be present. If one is missing, apply Section 9B and mark the report provisional.
-2. Build the options: for each recovery option (Repair Now, Transfer Part, Swap Aircraft, Delay Flight) collect time back in service, affected flights, affected packages, risk metrics and confidence.
-3. Rank with a fixed rule. Default rule: fewest affected flights first, then fastest return to service, then fewest priority packages at risk. If two options are within 2% of each other on the ranking measure, present both with their trade-offs and require the human to choose. The rule is a team decision and is changed here only.
-4. Label: assign a status (feasible, high-risk, deferred) and a confidence label using the thresholds in Section 9A.
-5. Fill the report template (below). Every sentence comes from template fields; the Controller LLM explains the result but does not re-rank it.
-6. Approval gate: the report is advisory only, requires human approval before any action, and is stored with an audit record.
+1. Build candidates: the Controller builds the candidate recovery options (Repair with original part, Repair with preferred/alternate part, Swap Aircraft, Delay Flight), each combined with a sourcing method and a package load-redistribution plan. Maintenance and Materials & Logistics are run concurrently for each candidate; Operations then runs per candidate using the resulting ETA.
+2. Completeness check: the Maintenance output (return-to-service ETA, root cause, risk metrics, compliance status, confidence), the Materials & Logistics output (sourcing method, ETA, cost, authorization status) and the Operations output (affected flights and packages, load redistribution, swap options, cost) must all be present. If one is missing, apply Section 9B and mark the report provisional.
+3. Compliance gate: exclude any option that fails airworthiness or engineering approval (Aircraft Maintenance Technician/Engineer check) or part authorization and traceability (Materials Inventory Specialist check). Excluded options are listed with the reason and are never ranked.
+4. Weighted ranking with a fixed rule: score = 30% recovery speed + 30% operational and package impact (affected flights, unprotected packages weighted by priority) + 30% risk + 10% cost (total estimated_cost in USD, mock). If two options are within 2% of each other on the score, present both with their trade-offs and require the human to choose. The weights are a team decision and are changed here only.
+5. Label: assign a status (feasible, high-risk, deferred) and a confidence label using the thresholds in Section 9A.
+6. Fill the report template (below). Every sentence comes from template fields; the Controller LLM explains the result but does not re-rank it.
+7. Approval gate: the report is advisory only, requires human approval before any action (Ops lead for the operational plan and the Maintenance/airworthiness authority for any repair or part decision), and is stored with an audit record.
 
 Report template:
 ```text
@@ -202,11 +210,15 @@ Recovery options for <aircraft_id> (<event_id>)
 
 <rank>. <option>   (RECOMMENDED on rank 1)
    - Back in service: <time> (about <hours> hours)
+   - Sourcing: <method, source, ETA>
    - Affected flights: <list or none>
-   - Affected packages: <total / priority, when provided by Operations>
+   - Affected packages: <total / priority / unprotected after redistribution, when provided by Operations>
+   - Estimated cost: <USD, mock>
    - Risk metrics: <from Maintenance>
+   - Score: <weighted score>
    - Trade-off: <sentence built from the fields above>
 
+Excluded options (compliance gate): <option and reason, or none>
 Assumptions: <list>
 Confidence: <label>    Status: <feasible|high-risk|deferred>
 Advisory only. Human approval is required before any action.
@@ -314,7 +326,7 @@ Request JSON:
 {
   "case_id": "AOG-2026-1001",
   "severity": "high",
-  "approval_threshold": "ops_lead_required",
+  "approval_threshold": "ops_lead_and_airworthiness_required",
   "current_decision_state": "pending"
 }
 ```
@@ -324,7 +336,7 @@ Response JSON:
 {
   "approval_status": "required",
   "gate_passed": false,
-  "approver_role": "ops_lead",
+  "approver_role": "ops_lead_and_maintenance_airworthiness_authority",
   "required_action": "human_approval"
 }
 ```

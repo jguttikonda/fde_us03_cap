@@ -110,7 +110,7 @@ docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as the authoritative source
 material. Cover repair feasibility, maintenance evidence, recurring failure
 detection, preferred replacement parts, parts availability, alternate and
 approved substitute sourcing, internal transfer, vendor sourcing, shipping
-and ETA, material readiness, uncertainty, MCP tool
+and ETA, root cause, need-by time, airworthiness approval, part authorization and traceability, cost per sourcing method (FedEx network and commercial carriers), material readiness, uncertainty, MCP tool
 adapters, deterministic guardrails, cached inventory fallback, conflict
 handling, direct Maintenance to Materials & Logistics A2A collaboration
 (recorded in the Controller case context per ARD-SYS-004, e.g. P-110 failed
@@ -156,7 +156,9 @@ Proposal prompt:
 Use docs/proposal.md, docs/agent-proposals/operations-agent-proposal.md, and
 docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as the authoritative source
 material. Cover flight, route, fleet, schedule, customer, crew, aircraft-swap,
-reroute, and delay impact analysis. Define MCP tool adapters, deterministic
+and delay impact analysis, plus package load redistribution (aircraft capacity
+by tail, package manifests with service level, sort and cut-off windows,
+unprotected packages) and per-option estimated cost. Define MCP tool adapters, deterministic
 schedule and assignment conflict checks, structured recommendations,
 uncertainty handling, degraded results, timeout behavior, and unit and contract
 tests. Ensure the output distinguishes evidence from assumptions and remains
@@ -173,7 +175,8 @@ Expected scope:
 - Schedule and route impact
 - Aircraft assignment conflicts
 - Swap and substitution options
-- Delay and reroute evaluation
+- Delay and swap evaluation
+- Package load redistribution within capacity and cut-off, with unprotected remainder
 - Customer, crew, and fleet impact
 - Operational risk and cost
 - Tool timeout and degraded-result handling
@@ -242,16 +245,19 @@ Proposal prompt:
 Use docs/proposal.md,
 docs/agent-proposals/controller-agent-proposal.md, and
 docs/agent-proposals/AGENT_CONTRACT_TEMPLATE.md as source material (ARD-CTL-009
-to ARD-CTL-016 cover recommendation and ranking). Consume the
+to ARD-CTL-019 cover recommendation, compliance gate, candidate model and ranking). Consume the
 specialist findings gathered by the Controller. Cover candidate recovery
-option construction, weighted option scoring, explainable trade-offs, evidence
+option construction (repair with original part, repair with preferred or
+alternate part, swap, delay), concurrent per-candidate evaluation, the
+compliance gate, weighted option scoring (speed 30, operational and package
+impact 30, risk 30, cost 10), estimated cost in USD, explainable trade-offs, evidence
 references, assumptions, risks, warnings, uncertainty, closely ranked options,
 provisional decisions, and approve, reject, or escalate actions. Produce a
 structured decision-ready report and an auditable human decision record. The
 Controller owns workflow completion, escalation, ranking, explanation, and
 report generation (there is no separate Recommendation or Report Creation
 Agent); the human owns final
-approval. The system must remain advisory and must never execute an operational
+approval by both the Ops lead and the Maintenance/airworthiness authority. The system must remain advisory and must never execute an operational
 action automatically. Include unit, contract, and workflow tests.
 ```
 
@@ -264,8 +270,8 @@ Suggested capabilities:
 Expected scope:
 
 - Candidate recovery option construction
-- Weighted option scoring
-- Repair, transfer, swap, reroute, and delay comparisons
+- Weighted option scoring after the compliance gate
+- Repair (original or alternate part), swap, and delay comparisons
 - Closely scored option behavior
 - Evidence, assumptions, risks, warnings, and trade-offs
 - Provisional recommendation status
