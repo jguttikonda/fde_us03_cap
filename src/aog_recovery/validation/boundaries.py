@@ -30,6 +30,12 @@ def _validate_model[Contract: BaseModel](
     return validated, ValidationReport(is_valid=True, findings=())
 
 
+def validate_contract[Contract: BaseModel](
+    model: type[Contract], payload: object
+) -> tuple[Contract | None, ValidationReport]:
+    return _validate_model(model, payload)
+
+
 def validate_case(payload: object) -> ValidationReport:
     _, report = _validate_model(AogCase, payload)
     return report

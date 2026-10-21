@@ -210,6 +210,7 @@ Operational validation is performed through a deterministic MCP tool layer befor
 - `check_fleet_availability`: validates candidate replacement aircraft and current availability windows
 - `apply_disruption_thresholds`: converts schedule and deviation data into standard impact levels
 - `check_load_redistribution`: moves packages to other flights or spare aircraft within capacity and cut-off limits and returns the unprotected remainder
+- `find_replacement_flights`: searches own-network and partner flights on the affected routes, applies the human-set reroute policy (partner allowed, own network first, partner cost cap), booking deadlines, service levels, and cut-offs, and marks each flight usable or restricted with a reason; the agent proposes flights only and never books them
 - `format_impact_payload`: produces the structured operational output used for final comparison and decisioning
 
 ### 8.2 Domain APIs Reached through MCP Tools
@@ -221,6 +222,7 @@ These validation functions are backed by operational data APIs and service feeds
 - Customer Service Priority API: supplies service-critical route and impact weighting information
 - Disruption / Network API: identifies active weather, outage, and route disruption conditions affecting the case
 - Package Load API (mock): returns aircraft capacity by tail, package manifests with service level, and sort/cut-off windows
+- Flight Capacity API (mock): returns own-network and partner flights with spare package capacity, cost per package, accepted service levels, and booking deadlines
 
 ### 8.3 Tool Interaction Contract (JSON)
 The deterministic tool layer produces structured operational facts that are then interpreted by the LLM for trade-off reasoning.
