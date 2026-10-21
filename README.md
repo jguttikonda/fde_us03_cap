@@ -79,6 +79,17 @@ This project aims to:
 
 ## Development Setup
 
+The complete locked runtime and development package export, including hashes,
+is available in [envsetuprequirements.txt](envsetuprequirements.txt). It is
+generated from `uv.lock`; regenerate it after dependency changes with:
+
+```powershell
+uv export --locked --all-groups --format requirements-txt --no-emit-project --output-file envsetuprequirements.txt
+```
+
+For the standard project environment, use `uv sync`; it reads dependencies from
+`pyproject.toml` and `uv.lock` rather than from the export file.
+
 The project requires Python 3.14 and uses `uv` to create an isolated environment
 and install the Google ADK, Pydantic, and development tools declared in
 `pyproject.toml`.
@@ -86,13 +97,28 @@ and install the Google ADK, Pydantic, and development tools declared in
 From the repository root in PowerShell:
 
 ```powershell
-uv sync --all-groups
+uv sync --all-groups --locked
 uv run python --version
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 ```
+
+### Gemini API key
+
+The local `.env` file is ignored by Git. Add your Google AI Studio key to its
+`GOOGLE_API_KEY` entry; do not commit or share this file. For a fresh checkout,
+copy `.env.example` to `.env` first. The project uses `GOOGLE_GENAI_USE_VERTEXAI=FALSE`
+for API-key authentication. To pass the key to a command, use:
+
+```powershell
+uv run --env-file .env <command>
+```
+
+VS Code Python terminals are configured to load `.env` when opened. Restart
+existing terminals after changing the file. Never paste the API key into source,
+tests, logs, or chat.
 
 VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace
