@@ -1,0 +1,551 @@
+====================================================================================================
+PROPOSAL UPDATE PLAN  -  AOG RECOVERY COORDINATOR
+Changes to: propsal.md (main proposal) and the agent-proposals/*.md files
+Owners:     Preet, Jag, Sri, Jay
+====================================================================================================
+
+NOTE ON FILE NAMES
+  The main proposal file in the repo is spelled "propsal.md" (missing an "o"). In this plan it is
+  called "propsal.md" or "the main proposal". Do NOT rename it as part of these tasks.
+  Agent files live in agent-proposals/ (controller, maintenance, inventory, operations).
+
+
+====================================================================================================
+PART 1.  WHAT WE DECIDED (read this first, 2 minutes)
+====================================================================================================
+
+  1. We are NOT sure the design is "A2A" (agent-to-agent) or "agent + sub-agent". So we stop saying
+     A2A. Use the neutral words "multi-agent" until the team decides.
+
+  2. The Report Creation Agent is removed. Final reporting becomes a DETERMINISTIC (rule/template
+     based) task that belongs to the Controller Agent. There is no report-creation agent file.
+
+  3. The Inventory Agent is a SUB-AGENT of the Maintenance Agent. Maintenance calls it, Inventory
+     answers Maintenance. Inventory does not talk to the Controller directly.
+
+  4. The Maintenance Agent has one job: establish an ETA (when can the aircraft fly again?) and,
+     based on that ETA, give risk metrics. It does not "check work-order completeness" as a
+     deterministic rule.
+
+  5. The Controller's deterministic rules are described ONLY in controller-agent-proposal.md. The
+     main proposal just points to that file (no duplicate copy).
+
+  6. Sections 9, 10, 11, 12, 13 of the main proposal stay, but are tagged OPTIONAL / GOOD TO HAVE.
+
+  7. Operations Agent covers BOTH flight disruption AND package (cargo) disruption, and its file
+     gets a use-case scenario with mock data.
+
+
+====================================================================================================
+PART 2.  AGENT MAP AND HANDSHAKES (used by every task below)
+====================================================================================================
+
+  Based on the main architecture diagram (Section 5), updated for the decisions above.
+
+  Final agent list:
+    - Controller Agent   (top level; also builds the final report deterministically)
+    - Maintenance Agent  (top level; owns the ETA and risk metrics)
+    - Inventory Agent    (SUB-AGENT of Maintenance)
+    - Operations Agent   (top level; flight + package disruption)
+
+  Diagram (paste-ready Mermaid for Section 5 and Section 7.1):
+
+    flowchart TB
+        Human[Human] -->|AOG event| Controller[Controller Agent]
+        Controller -->|repair ETA request| Maintenance[Maintenance Agent]
+        Maintenance -->|part check request| Inventory[Inventory Agent - sub-agent]
+        Inventory -->|availability and lead time| Maintenance
+        Maintenance -->|ETA and risk metrics| Controller
+        Controller -->|ETA window and options| Operations[Operations Agent]
+        Operations -->|flight and package impact| Controller
+        Controller -->|ranked recommendation report| Human
+        Human -->|approve or reject| Controller
+
+  Handshake table (use these IDs and names everywhere so the files match):
+
+   ID  | From           | To             | What is passed
+   ----+----------------+----------------+-----------------------------------------------------------
+   H1  | Human          | Controller     | AOG event: aircraft id, fault, station
+   H2  | Controller     | Maintenance    | Validated event + defect context. Ask: repair ETA
+   H3  | Maintenance    | Inventory      | Required part numbers, station, need-by time
+   H4  | Inventory      | Maintenance    | Stock per station, alternates, supplier lead time,
+       |                |                | parts-ready ETA, confidence
+   H5  | Maintenance    | Controller     | Return-to-service ETA, risk metrics, confidence, assumptions
+   H6  | Controller     | Operations     | Event + ETA window(s) + candidate recovery options
+   H7  | Operations     | Controller     | Affected flights, affected packages, swap options,
+       |                |                | recommended operational path, confidence
+   H8  | Controller     | Human          | Ranked recommendation report (built by deterministic rules)
+   H9  | Human          | Controller     | Approval or rejection
+
+  Standard heading every agent file must use for its handshake section (so files look the same):
+        ## 2A. Handshake with Other Agents
+      with four short lines: Agent type (top-level or sub-agent) / Called by / Calls / Payload in and out
+      (reference the H-numbers above).
+
+
+====================================================================================================
+PART 3.  TASK CHART  (4 tasks each, effort balanced: S=1, M=2, L=3)
+====================================================================================================
+
+  Status boxes: [ ] not started   [~] in progress   [x] done
+
+  ID  | File                                    | Task (short)                                | Size | Owner | Status
+  ----+-----------------------------------------+---------------------------------------------+------+-------+-------
+  T01 | propsal.md (+ root README.md)           | Remove A2A wording                          |  S   | Sri   | [ ]
+  T02 | propsal.md                              | Remove 6.2, point to controller file        |  S   | Preet | [ ]
+  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [x]
+  T04 | propsal.md                              | Remove Report Creation Agent everywhere     |  L   | Preet | [ ]
+  T02 | propsal.md                              | Remove 6.2, point to controller file        |  S   | Preet | [x]
+  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [x]
+  T04 | propsal.md                              | Remove Report Creation Agent everywhere     |  L   | Preet | [x]
+  T05 | propsal.md                              | Redefine agent descriptions + handshake     |  L   | Sri   | [ ]
+  T06 | propsal.md                              | Rewrite 7.1 Controller diagram              |  M   | Sri   | [ ]
+  T07 | propsal.md                              | Merge 7.2 + 7.3 (Maintenance + Inventory)   |  M   | Jag   | [x]
+  T08 | propsal.md                              | Tag Sections 9-13 OPTIONAL / GOOD TO HAVE   |  S   | Jay   | [x]
+  T09 | controller-agent-proposal.md            | Redefine description + handshake            |  M   | Sri   | [ ]
+  T10 | controller-agent-proposal.md            | Add deterministic final reporting           |  M   | Preet | [x]
+  T11 | maintenance-agent-proposal.md           | ETA + risk metrics focus, Inventory below   |  M   | Jag   | [x]
+  T12 | inventory-agent-proposal.md             | Make it a sub-agent of Maintenance          |  M   | Jag   | [x]
+  T13 | operations-agent-proposal.md            | Flight + package disruption description     |  M   | Jay   | [x]
+  T14 | operations-agent-proposal.md            | Add use-case scenario + mock data           |  L   | Jay   | [x]
+  T15 | report-creation-agent-proposal.md,      | Delete file, fix agent-proposals README     |  S   | Preet | [x]
+      | agent-proposals/README.md               |                                             |      |       |
+  T16 | AGENT_CONTRACT_TEMPLATE.md              | Add "2A. Handshake" section to the template |  M   | Jay   | [x]
+
+  Per-person view:
+
+  Owner | Tasks                    | Effort | Theme
+  ------+--------------------------+--------+--------------------------------------------------------
+  Preet | T02, T04, T10, T15       |   7    | Report agent removal and Controller takes over reporting
+  Jag   | T03, T07, T11, T12       |   7    | Maintenance and its Inventory sub-agent
+  Sri   | T01, T05, T06, T09       |   8    | Wording, architecture diagrams, Controller description
+  Jay   | T08, T13, T14, T16       |   8    | Operations agent, optional tags, template
+
+  Total effort: 30. Every person has exactly 4 tasks.
+
+  Suggested review pairs (reviewer checks the PR before merge):
+     Preet's PR -> Jag reviews     Jag's PR -> Sri reviews
+     Sri's PR   -> Jay reviews     Jay's PR -> Preet reviews
+
+
+====================================================================================================
+PART 4.  HOW TO WORK (so four people can edit one file without breaking each other)
+====================================================================================================
+
+  1. Start from the latest proposal_draft:    git switch proposal_draft ; git pull
+  2. Make your own branch, for example:       git switch -c update/<your-name>
+  3. Edit ONLY the sections named in your tasks. Commit small and often.
+  4. One PR per person into proposal_draft. Use your task IDs in the PR title (e.g. "T02 T04 T10 T15").
+  5. Before opening the PR:  git pull origin proposal_draft  and fix any conflicts.
+  6. propsal.md is touched by several people. To limit conflicts, merge in this order:
+        Phase 1 (removals):   Preet (T02, T04, T15), Jag (T03), Sri (T01)
+        Phase 2 (rewrites):   Sri (T05, T06, T09), Jag (T07, T11, T12), Preet (T10), Jay (T13, T14)
+        Phase 3 (finishing):  Jay (T08, T16)
+     If two PRs touch the same lines, the later PR resolves the conflict, not the earlier one.
+  7. Do not delete content that is not listed in your task. If something looks wrong, add a comment
+     in your PR instead of silently changing it.
+
+  Overlap rules (these places are touched by more than one task, so ownership is fixed):
+     - Section 1 Executive Summary, first paragraph ........... Sri (T01) edits the WHOLE paragraph
+                                                                 (A2A wording AND the agent list).
+     - Section 5 Solution Overview (diagram + text) ........... Sri (T05) edits all of it
+                                                                 (Preet skips it in T04).
+     - Section 14 Final Positioning ........................... Preet (T04) edits the whole
+                                                                 paragraph (A2A wording AND agents).
+     - Section 6 heading numbers ................................ Preet renumbers after T02 and T04.
+     - Section 7 heading numbers ................................ Jag renumbers after T07.
+     - Handshake section name ................................... always "## 2A. Handshake with Other
+                                                                 Agents" (see Part 2).
+
+
+====================================================================================================
+PART 5.  DETAILED TASKS FOR THE MAIN PROPOSAL (propsal.md)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+T01  |  Remove A2A wording  |  Owner: Sri  |  Size S
+----------------------------------------------------------------------------------------------------
+  WHY      We are not sure the design is A2A or agent + sub-agent, so the document must not claim A2A.
+  WHAT     Take out the words "Agent-to-Agent" and "A2A". Use "multi-agent" instead.
+  WHERE    propsal.md
+             - Line under the title (the "###" line): "Agent-to-Agent (A2A) Recovery Decision Support
+               System using Google ADK"  ->  "Multi-Agent Recovery Decision Support System using
+               Google ADK"
+             - Section 1 Executive Summary, first paragraph: "is an Agent-to-Agent (A2A) solution
+               built using Google ADK"  ->  "is a multi-agent solution built using Google ADK".
+               In the same sentence replace the agent list "Maintenance, Inventory, Operations, and
+               Recommendation management" with "Maintenance (supported by an Inventory sub-agent) and
+               Operations, coordinated by the Controller".
+             - Section 4 heading "Why A2A vs Deterministic Solutions"  ->  "Why Agentic vs
+               Deterministic Solutions"
+           README.md at the repository root: first paragraph, "built as an Agent-to-Agent (A2A)
+           decision support system"  ->  "built as a multi-agent decision support system".
+  NOT YOURS  Section 14 and Appendix wording is handled in T04 (Preet).
+  DONE WHEN  Searching propsal.md and the root README.md for "A2A" and "Agent-to-Agent" finds nothing
+             (Section 14 may still be open until T04 merges).
+
+----------------------------------------------------------------------------------------------------
+T02  |  Remove 6.2 and route to the controller file  |  Owner: Preet  |  Size S
+----------------------------------------------------------------------------------------------------
+  WHY      Controller rules should live only in agent-proposals/controller-agent-proposal.md, so
+           there is one place to maintain.
+  WHAT     Delete "6.2 Deterministic Responsibilities" under the Controller Agent. Replace it with one
+           pointer sentence:
+             "The Controller's deterministic responsibilities are defined in
+              agent-proposals/controller-agent-proposal.md (Section 9)."
+  WHERE    propsal.md, Section 6, Controller Agent block.
+  THEN     After T02 and T04 are both done, renumber the sub-headings of Section 6 in order
+           (6.1, 6.2, 6.3 ...) so there are no gaps.
+  DONE WHEN  There is no bullet list of Controller deterministic rules in propsal.md, the pointer
+             exists, and Section 6 numbering has no gaps.
+
+----------------------------------------------------------------------------------------------------
+T03  |  Remove 6.6 bullet 2  |  Owner: Jag  |  Size S
+----------------------------------------------------------------------------------------------------
+  WHY      The Maintenance Agent's goal is to establish an ETA and then give risk metrics. Checking
+           work-order completeness is not part of that goal.
+  WHAT     In "6.6 Deterministic Responsibilities" (Maintenance Agent) delete the second bullet:
+             "Check work-order completeness and maintenance readiness conditions"
+  WHERE    propsal.md, Section 6, Maintenance Agent block.
+  DONE WHEN  The Maintenance deterministic list has one bullet fewer and the remaining bullets still
+             read cleanly. (The matching change in the agent file is T11.)
+
+----------------------------------------------------------------------------------------------------
+T04  |  Remove the Report Creation Agent everywhere  |  Owner: Preet  |  Size L
+----------------------------------------------------------------------------------------------------
+  WHY      Reporting becomes a deterministic Controller task. There is no separate agent.
+  WHAT     Remove every mention of the Report Creation Agent and say instead that the Controller
+           builds the final report from fixed rules and templates.
+  WHERE    propsal.md
+             - Section 6: delete the whole "Report Creation Agent" block (6.17 to 6.20).
+             - Section 6.21 "Design Principle for All Agents": remove any reference to a report agent;
+               final text should say the Controller assembles the final report deterministically.
+             - Section 7.5 "Report Creation Agent Architecture": delete the whole section.
+             - Section 7.6 "Shared Design Principles": check text for report agent mentions.
+             - Section 8 Sequence Diagram: remove the "Report" participant and its arrows. The Controller
+               now returns the final recovery recommendation to the user itself.
+             - Section 9 Tool & API Mapping table: delete the "Report Creation" row.
+             - Section 14 Final Positioning: remove "Report Creation" from the agent list AND remove the
+               words "Agent-to-Agent" (this paragraph is yours, see Overlap rules).
+           Add in Section 6 (Controller block) one sentence: "The Controller also assembles the final
+           ranked recommendation report using deterministic rules and templates."
+  NOT YOURS  Section 5 diagram and Section 7.1 diagram (Sri: T05, T06); Section 1 (Sri: T01).
+  DONE WHEN  Searching propsal.md for "Report Creation", "Report Agent" and "reporting agent" finds
+             nothing except the Controller sentence above.
+
+----------------------------------------------------------------------------------------------------
+T05  |  Redefine agent descriptions and show the handshake  |  Owner: Sri  |  Size L
+----------------------------------------------------------------------------------------------------
+  WHY      Descriptions must match the new roles, and readers must see who talks to whom.
+  WHAT     (a) Rewrite the short description under each agent heading in Section 6.
+           (b) Rewrite Section 5 Solution Overview: new diagram and a short handshake table.
+  WHERE    propsal.md, Sections 5 and 6.
+
+  (a) Suggested descriptions (edit the wording if you improve it, keep the meaning):
+
+    Controller Agent
+      "The Controller Agent is the entry point and coordinator. It receives the AOG event from the
+       human, validates it, asks the Maintenance Agent for a return-to-service ETA, passes that ETA
+       to the Operations Agent to measure disruption, and then builds the ranked recommendation
+       report with deterministic rules. It never approves on the human's behalf."
+
+    Maintenance Agent
+      "The Maintenance Agent answers one question: when can the aircraft fly again? It combines the
+       repair duration with the parts wait obtained from its Inventory sub-agent to establish an
+       ETA, and then reports risk metrics based on that ETA (for example ETA confidence, delay risk
+       and dependency risk)."
+
+    Inventory Agent
+      "The Inventory Agent is a sub-agent of the Maintenance Agent. When Maintenance asks, it checks
+       whether the required part is in stock at the station, at other stations or with a supplier,
+       whether an approved alternate exists, and how long each source takes. It reports only to
+       Maintenance."
+
+    Operations Agent
+      "The Operations Agent measures how the outage disrupts the network: which flights are affected
+       and which packages ride on those flights. Using the ETA window from the Controller it compares
+       delay, aircraft swap and re-routing options and recommends the least harmful operational path."
+
+  (b) Section 5: replace the current diagram with the Part 2 diagram (no Report node, Inventory under
+      Maintenance). Under it add the handshake table from Part 2 (H1 to H9) so readers can see the
+      conversation order. Keep the sentence that the human gives the final approval.
+  DONE WHEN  Section 6 descriptions match the text above, Section 5 shows the new diagram plus the
+             H1-H9 table, and no description mentions a Report agent.
+
+----------------------------------------------------------------------------------------------------
+T06  |  Rewrite 7.1 Controller Agent Architecture  |  Owner: Sri  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHY      The current 7.1 diagram has the "unwarranted" reporting agent and shows Inventory as a
+           peer of Maintenance.
+  WHAT     Redraw the 7.1 diagram so that:
+             - there is NO Report Creation Agent node;
+             - Inventory sits UNDER Maintenance (Maintenance calls Inventory);
+             - the Controller has a deterministic "Final Report Builder" step before Human Approval.
+           Suggested diagram:
+
+             flowchart LR
+                 Input[Validated AOG Event] --> Controller[Controller Agent]
+                 Controller --> Shared[Shared Coordination Context]
+                 Shared --> Maintenance[Maintenance Agent]
+                 Maintenance --> Inventory[Inventory Sub-Agent]
+                 Inventory --> Maintenance
+                 Shared --> Operations[Operations Agent]
+                 Maintenance --> Findings[Agent Outputs]
+                 Operations --> Findings
+                 Findings --> Builder[Final Report Builder - deterministic]
+                 Builder --> Human[Human Approval]
+
+           Then update the paragraph and the "Controller responsibilities" bullet list under the
+           diagram: remove "generate final report" as an LLM task and say the report is built by
+           deterministic rules (Section 6 and T10).
+  DONE WHEN  7.1 has no report agent, Inventory is under Maintenance, and the text matches the diagram.
+
+----------------------------------------------------------------------------------------------------
+T07  |  Merge 7.2 and 7.3 into one section  |  Owner: Jag  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHY      Inventory is now a sub-agent of Maintenance, so they are described together.
+  WHAT     Combine "7.2 Maintenance Agent Architecture" and "7.3 Inventory Agent Architecture" into one
+           section named "7.2 Maintenance Agent Architecture (with Inventory Sub-Agent)".
+             - One diagram: Shared context -> Maintenance (validation, context, memory, LLM reasoning)
+               -> calls Inventory sub-agent (its own validation, memory, tools) -> Inventory returns to
+               Maintenance -> Maintenance output (ETA + risk metrics) -> Controller.
+             - One text block: what Maintenance owns, what Inventory owns, and what is handed over (H3,
+               H4, H5 in Part 2).
+             - Keep the "specific elements" bullet lists, but under two clear sub-headings so nothing
+               is lost.
+           Renumber the rest of Section 7: Operations becomes 7.3 and "Shared Design Principles"
+           becomes 7.4 (7.5 is removed in T04). Fix any text that refers to the old numbers.
+  DONE WHEN  Section 7 has 7.1, 7.2 (merged), 7.3 Operations, 7.4 Shared Design Principles, and the
+             merged diagram renders in a Markdown preview.
+
+----------------------------------------------------------------------------------------------------
+T08  |  Tag Sections 9 to 13 as OPTIONAL / GOOD TO HAVE  |  Owner: Jay  |  Size S
+----------------------------------------------------------------------------------------------------
+  WHY      These sections are useful but not needed for the first working version.
+  WHAT     Keep the content. Change each heading and add a one-line note under it:
+              # 9.  Tool & API Mapping                  ->  # 9.  Tool & API Mapping  [OPTIONAL - GOOD TO HAVE]
+              # 10. Security Guardrails                 ->  # 10. Security Guardrails  [OPTIONAL - GOOD TO HAVE]
+              # 11. Safety Controls                     ->  # 11. Safety Controls  [OPTIONAL - GOOD TO HAVE]
+              # 12. Human-in-the-Loop Governance        ->  # 12. Human-in-the-Loop Governance  [OPTIONAL - GOOD TO HAVE]
+              # 13. Expected Business Impact            ->  # 13. Expected Business Impact  [OPTIONAL - GOOD TO HAVE]
+           Note line to add under each heading (italic):
+              "_Optional section. Good to have; not required for the first working version._"
+  DONE WHEN  Exactly five headings carry the tag and nothing else in the document does.
+             (Do not delete the "Report Creation" row of Section 9: that is Preet's T04.)
+
+
+====================================================================================================
+PART 6.  DETAILED TASKS FOR THE AGENT FILES (agent-proposals/)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+T09  |  controller-agent-proposal.md: description and handshake  |  Owner: Sri  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHAT     (a) Rewrite "1. Purpose" and "2. Role in the System" to match the Controller description in
+               T05: entry point, asks Maintenance for the ETA, passes the ETA to Operations, builds the
+               report with deterministic rules, hands to the human.
+           (b) Add a new section "## 2A. Handshake with Other Agents":
+                 Agent type:    top-level
+                 Called by:     Human (H1, H9)
+                 Calls:         Maintenance (H2, receives H5), Operations (H6, receives H7)
+                 Returns to:    Human (H8)
+               Plus a short numbered walk-through of the order H1 to H9 in plain words.
+           (c) Clean up wording that implies a separate report agent or a Controller "LLM writes the
+               report" (the final report is now deterministic; T10 adds those details).
+  DONE WHEN  A reader can tell in 30 seconds who the Controller calls, in what order, and what each
+             side sends.
+
+----------------------------------------------------------------------------------------------------
+T10  |  controller-agent-proposal.md: deterministic final reporting  |  Owner: Preet  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHY      The report is no longer made by a Report Creation Agent. The Controller owns it, and it must
+           be rule-based and repeatable.
+  WHAT     Add the reporting work to the existing sections (do not create a new agent):
+             - "3. Primary Responsibilities": add "Deterministic final report assembly".
+             - "9. Deterministic Responsibilities": add bullets for
+                 * check that the Maintenance output (ETA + risk metrics) and the Operations output are
+                   both present before building the report
+                 * rank the recovery options with a written, fixed scoring rule
+                 * apply the report template (option, time back in service, affected flights and
+                   packages, trade-off, assumptions, confidence label)
+                 * apply the confidence thresholds and approval gate already in "9A"
+             - "12/13 Outputs": the ranked recommendation report and approval request are outputs of
+               the Controller.
+             - "15. Acceptance Criteria": add "report is complete, repeatable and rule-based".
+           Write the ranking rule explicitly (see Part 7, open decision 3). Any narrative sentences in
+           the report should be filled from template fields, not free-form.
+  DONE WHEN  Every step from "specialist outputs received" to "report shown to the human" is described
+             as a rule or template, with nothing left to an unnamed report agent.
+
+----------------------------------------------------------------------------------------------------
+T11  |  maintenance-agent-proposal.md: ETA and risk metrics  |  Owner: Jag  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHAT     (a) Rewrite "1. Purpose" and "2. Role in the System" with the Maintenance description in T05:
+               establish the ETA first, then recommend risk metrics based on the ETA.
+           (b) In "3. Primary Responsibilities" and "4. Non-Deterministic Responsibilities" focus on:
+               repair duration, parts wait (from Inventory), ETA, ETA confidence, risk metrics.
+           (c) In "9. Deterministic Responsibilities" change the first bullet from
+                 "Validate aircraft condition metadata and work-order completeness"
+               to "Validate aircraft condition metadata" (remove the work-order completeness check;
+               this mirrors T03). Also remove the same idea from the memory text in section 5 and from
+               the LLM-facing inputs where it is listed as a rule rather than as data.
+           (d) Add output fields to "8. Expected Output Standard Format": eta_hours, return_to_service
+               time, eta_confidence, risk_metrics (for example delay risk, parts dependency risk,
+               repair complexity risk).
+           (e) Add "## 2A. Handshake with Other Agents":
+                 Agent type:    top-level, has one sub-agent
+                 Called by:     Controller (H2)
+                 Calls:         Inventory sub-agent (H3, receives H4)
+                 Returns to:    Controller (H5)
+  DONE WHEN  The file never asks Maintenance to do a work-order completeness check, and it clearly
+             states "ETA first, then risk metrics".
+
+----------------------------------------------------------------------------------------------------
+T12  |  inventory-agent-proposal.md: make it a sub-agent  |  Owner: Jag  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHAT     (a) Rewrite "1. Purpose" and "2. Role in the System": Inventory is a sub-agent of the
+               Maintenance Agent, called by Maintenance, answering Maintenance only.
+           (b) Add "## 2A. Handshake with Other Agents":
+                 Agent type:    sub-agent of Maintenance
+                 Called by:     Maintenance (H3)
+                 Calls:         none (reads inventory and supplier data through its tools)
+                 Returns to:    Maintenance (H4)
+           (c) Wherever the file says the output goes to the Controller, change it to Maintenance
+               (the "Handshake Chain" text and "Tool / External System Outputs").
+           (d) Make sure the output contains the parts-ready ETA so Maintenance can add it to the
+               repair duration. Fields: stock per station, transfer hours, alternates, supplier lead
+               time, parts_ready_eta, confidence.
+  DONE WHEN  Nothing in the file implies Inventory talks to the Controller or to Operations.
+
+----------------------------------------------------------------------------------------------------
+T13  |  operations-agent-proposal.md: flight AND package disruption  |  Owner: Jay  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHAT     Change the description so the agent clearly covers flight disruption and package
+           (cargo) disruption, and spell out the non-deterministic (judgement) work it does.
+           Suggested "1. Purpose":
+             "The Operations Agent measures how an AOG event disrupts flights and the packages that
+              ride on them, and recommends the least harmful operational path."
+           Update these sections:
+             - "3. Primary Responsibilities": add packages affected, time-critical (priority) package
+               exposure, service commitments at risk.
+             - "4. Non-Deterministic Responsibilities": add judgement work, for example:
+                 * deciding which disruption hurts most when flight delay and package service risk
+                   point in different directions
+                 * choosing between holding packages for the delayed aircraft, moving them to another
+                   flight or swapping the aircraft, when the numbers alone do not decide
+                 * weighing a small number of high-priority packages against a larger number of
+                   standard ones
+                 * judging how much slack the network has when the ETA is uncertain
+                 * explaining the package and customer impact in plain business words
+             - "6. LLM Role", "10. LLM-Facing Inputs", "11. Tool Inputs": add package manifests per
+               flight, service level of each package, sort and cut-off windows.
+             - "12/13 Outputs": add package impact summary alongside the flight impact.
+             - "14. Questions": add "Which packages are affected and how many are time-critical?"
+             - Add "## 2A. Handshake with Other Agents":
+                 Agent type:    top-level
+                 Called by:     Controller (H6)
+                 Calls:         none
+                 Returns to:    Controller (H7)
+  DONE WHEN  Reading Sections 1, 3 and 4 makes it obvious the agent reasons about BOTH flights and
+             packages and why that needs judgement and not only rules.
+
+----------------------------------------------------------------------------------------------------
+T14  |  operations-agent-proposal.md: use-case scenario and mock data  |  Owner: Jay  |  Size L
+----------------------------------------------------------------------------------------------------
+  WHAT     Add a new section near the end (before "Draft Notes") named "Use-Case Scenario and Mock
+           Data", with: the story, the input data tables, what the agent must produce, and the
+           expected recommendation. All data must be labelled MOCK DATA.
+
+  Starter scenario (reuse or improve; keep it consistent with the FX123 demo data):
+    Story: Aircraft FX123 is grounded at MEM with a hydraulic pump failure. Maintenance returns an ETA
+    to the Controller. The Controller passes the ETA window to Operations. Operations must say which
+    flights and packages are hurt and which operational path is best.
+
+    Mock "now": 2026-10-19 13:10
+
+    Mock input 1: ETA window from Maintenance (via Controller)
+        Option "Transfer Part"  : back in service in 9 hours  (2026-10-19 22:10)
+        Option "Delay Flight"   : back in service in 27 hours (2026-10-20 16:10)
+
+    Mock input 2: FX123 flights and the packages on them
+        Flight | Route     | Departure        | Packages | Priority packages
+        FX401  | MEM - IND | 2026-10-19 15:30 | 1200     | 180
+        FX812  | IND - MEM | 2026-10-19 19:00 |  900     | 140
+        FX955  | MEM - DFW | 2026-10-20 08:00 |  700     |  60
+
+    Mock input 3: Spare aircraft
+        FX207, same type as FX123, at MEM, no flights scheduled in the window.
+
+    Mock input 4: Network constraints
+        Cut-off time for FX401 packages: 15:00. Sort window at IND: 17:30 to 18:30.
+
+    What the agent must produce (per option):
+        affected flights, affected packages, priority packages at risk, swap availability, a
+        recommended operational path, confidence, assumptions.
+
+    Expected outcome (for the test to check against):
+        Option                  | Flights affected       | Priority packages at risk
+        Swap Aircraft (FX207)   | FX401                  | 180 (short delay)
+        Transfer Part (9 h)     | FX401, FX812           | 320
+        Delay Flight (27 h)     | FX401, FX812, FX955    | 380
+        Recommended path: Swap Aircraft, because it affects the fewest flights and priority packages.
+        (If the team changes the ranking rule in open decision 3, update this line.)
+
+  Also add one second, short scenario that shows judgement is needed, for example the ETA is only
+  "low confidence" and a large block of priority packages sits on the earliest flight.
+  DONE WHEN  A new team member can read the section and reproduce the expected outcome by hand.
+
+----------------------------------------------------------------------------------------------------
+T15  |  Delete the report agent file and fix the agent index  |  Owner: Preet  |  Size S
+----------------------------------------------------------------------------------------------------
+  WHAT     - Delete agent-proposals/report-creation-agent-proposal.md  (git rm).
+           - agent-proposals/README.md:
+               * remove the "report-creation-agent-proposal.md" line from "Specialist Agent Proposals"
+               * in "Coordination Model" change the sentence that says the Report Creation Agent ranks
+                 options so that it says the Controller ranks them with deterministic rules
+               * label Inventory as "sub-agent of Maintenance" in the list
+               * the Controller is the coordinator, not a specialist: list it under its own heading
+                 (for example "Coordinator") instead of "Specialist Agent Proposals"
+           - Search the root README.md for the same report agent mentions and fix them.
+  DONE WHEN  Searching the whole repository for "report-creation" finds nothing.
+
+----------------------------------------------------------------------------------------------------
+T16  |  AGENT_CONTRACT_TEMPLATE.md: add the handshake section  |  Owner: Jay  |  Size M
+----------------------------------------------------------------------------------------------------
+  WHY      The template is the pattern every agent file follows. If it lacks the handshake section,
+           the files drift apart.
+  WHAT     - Add "## 2A. Handshake with Other Agents" right after "2. Role in the System", with the
+             four lines: Agent type, Called by, Calls, Returns to (reference H-numbers).
+           - Add one line to the template: "An agent is either top-level or a sub-agent of another."
+           - Update the "Standard Pattern for Each Agent" list in agent-proposals/README.md only if
+             Preet (T15) has not already touched that list; otherwise leave it and note it in the PR.
+  DONE WHEN  The template and all four agent files use the same heading text for the handshake.
+
+
+====================================================================================================
+PART 7.  OPEN DECISIONS (the team should confirm; the tasks above use the stated default)
+====================================================================================================
+
+  1. A2A or agent + sub-agent?  Default: neutral "multi-agent" wording (T01).
+  2. Does Operations start after Maintenance returns the ETA, or in parallel with a provisional ETA?
+     Default: after (H5 then H6). If parallel, update H6 and Section 8 sequence.
+  3. Ranking rule for the deterministic report. Default: fewest affected flights first, then fastest
+     return to service. Note: the earlier worked example favoured "Transfer Part", but this rule
+     recommends "Swap Aircraft". Pick one rule and use it in T10 and T14.
+  4. The demo code (aog_coordinator, branch aog-coordinator-build) still has a Report agent. Update it
+     after the documents above are agreed, so code and docs match.
+
+
+====================================================================================================
+PART 8.  FINAL CHECK BEFORE THE LAST PR IS MERGED
+====================================================================================================
+
+  [ ] No "A2A" or "Agent-to-Agent" anywhere (main proposal, README files, agent files)
+  [ ] No "Report Creation Agent" or report-creation file anywhere
+  [ ] Inventory is described as a sub-agent of Maintenance in every file
+  [ ] Maintenance output = ETA + risk metrics; no work-order completeness check
+  [ ] All four agent files have "## 2A. Handshake with Other Agents" using H1 to H9
+  [ ] Sections 9 to 13 tagged OPTIONAL / GOOD TO HAVE, nothing else tagged
+  [ ] Section numbers in 6 and 7 have no gaps; Mermaid diagrams render
+  [ ] Operations file has the package disruption text, the scenario and the mock data
+====================================================================================================
