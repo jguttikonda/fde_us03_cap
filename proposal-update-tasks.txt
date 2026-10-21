@@ -92,22 +92,25 @@ PART 3.  TASK CHART  (4 tasks each, effort balanced: S=1, M=2, L=3)
   ID  | File                                    | Task (short)                                | Size | Owner | Status
   ----+-----------------------------------------+---------------------------------------------+------+-------+-------
   T01 | propsal.md (+ root README.md)           | Remove A2A wording                          |  S   | Sri   | [ ]
+  T02 | propsal.md                              | Remove 6.2, point to controller file        |  S   | Preet | [ ]
+  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [x]
+  T04 | propsal.md                              | Remove Report Creation Agent everywhere     |  L   | Preet | [ ]
   T02 | propsal.md                              | Remove 6.2, point to controller file        |  S   | Preet | [x]
-  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [ ]
+  T03 | propsal.md                              | Remove 6.6 bullet 2                         |  S   | Jag   | [x]
   T04 | propsal.md                              | Remove Report Creation Agent everywhere     |  L   | Preet | [x]
   T05 | propsal.md                              | Redefine agent descriptions + handshake     |  L   | Sri   | [ ]
   T06 | propsal.md                              | Rewrite 7.1 Controller diagram              |  M   | Sri   | [ ]
-  T07 | propsal.md                              | Merge 7.2 + 7.3 (Maintenance + Inventory)   |  M   | Jag   | [ ]
-  T08 | propsal.md                              | Tag Sections 9-13 OPTIONAL / GOOD TO HAVE   |  S   | Jay   | [ ]
+  T07 | propsal.md                              | Merge 7.2 + 7.3 (Maintenance + Inventory)   |  M   | Jag   | [x]
+  T08 | propsal.md                              | Tag Sections 9-13 OPTIONAL / GOOD TO HAVE   |  S   | Jay   | [x]
   T09 | controller-agent-proposal.md            | Redefine description + handshake            |  M   | Sri   | [ ]
   T10 | controller-agent-proposal.md            | Add deterministic final reporting           |  M   | Preet | [x]
-  T11 | maintenance-agent-proposal.md           | ETA + risk metrics focus, Inventory below   |  M   | Jag   | [ ]
-  T12 | inventory-agent-proposal.md             | Make it a sub-agent of Maintenance          |  M   | Jag   | [ ]
-  T13 | operations-agent-proposal.md            | Flight + package disruption description     |  M   | Jay   | [ ]
-  T14 | operations-agent-proposal.md            | Add use-case scenario + mock data           |  L   | Jay   | [ ]
+  T11 | maintenance-agent-proposal.md           | ETA + risk metrics focus, Inventory below   |  M   | Jag   | [x]
+  T12 | inventory-agent-proposal.md             | Make it a sub-agent of Maintenance          |  M   | Jag   | [x]
+  T13 | operations-agent-proposal.md            | Flight + package disruption description     |  M   | Jay   | [x]
+  T14 | operations-agent-proposal.md            | Add use-case scenario + mock data           |  L   | Jay   | [x]
   T15 | report-creation-agent-proposal.md,      | Delete file, fix agent-proposals README     |  S   | Preet | [x]
       | agent-proposals/README.md               |                                             |      |       |
-  T16 | AGENT_CONTRACT_TEMPLATE.md              | Add "2A. Handshake" section to the template |  M   | Jay   | [ ]
+  T16 | AGENT_CONTRACT_TEMPLATE.md              | Add "2A. Handshake" section to the template |  M   | Jay   | [x]
 
   Per-person view:
 
