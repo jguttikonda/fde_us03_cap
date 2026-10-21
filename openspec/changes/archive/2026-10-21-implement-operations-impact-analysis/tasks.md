@@ -1,0 +1,29 @@
+# Tasks
+
+## 1. Contracts and Read-Only Adapters
+
+- [x] 1.1 Define versioned Pydantic request, candidate, evidence/provenance, adapter result/error, package allocation, cost, and Operations response contracts; include schema version, evidence/assumption separation, and missing/stale fields, then verify valid/invalid contract tests and the requirement-to-test map (operations-impact-analysis requirements: Validate and preserve operational evidence; Return a structured Operations assessment; ARD-TEC-003, ARD-PRN-005, ARD-PRN-007, ARD-TST-001..002).
+- [x] 1.2 Define typed read-only adapter interfaces, allowlisted MCP tool contracts (`validate_flight_schedule`, `detect_route_conflicts`, `check_fleet_availability`, `apply_disruption_thresholds`, and analysis-only `check_load_redistribution`), and deterministic local/mock adapters for schedule/route, disruptions, fleet assignments/substitutes, crew/station, customer priority, and package manifests/capacity; use the supported MCP SDK only when crossing a process/service boundary, then test allowlisting, malformed data, structured failures, and adapter contract compatibility (ARD-TEC-006, ARD-SYS-007..009, ARD-SEC-001..004, ARD-TST-002, ARD-TST-007, ARD-TST-009).
+
+## 2. Deterministic Impact and Package Analysis
+
+- [x] 2.1 Implement deterministic schedule, route, assignment, fleet availability, crew/station, and disruption-threshold validation; test feasible candidates and conflicts with affected-resource explanations using fixed fixtures (operations-impact-analysis requirement: Detect schedule, route, assignment, and feasibility conflicts deterministically; ARD-OPS-001..004, ARD-OPS-008, ARD-TST-003, ARD-TST-009).
+- [x] 2.2 Implement per-candidate repair-ETA, swap, and delay impact and transparent cost line items, including configured exposure for unprotected packages; test currency, calculations, unavailable cost evidence, and deterministic repeatability (operations-impact-analysis requirement: Assess Controller-supplied recovery options; ARD-OPS-003..005, ARD-PRN-003, ARD-NFR-003, ARD-TST-003, ARD-TST-009).
+- [x] 2.3 Implement package allocation by tail-specific remaining capacity, service-level ordering, and sort/cut-off feasibility, returning protected and unprotected counts by service level; test the 1,200-package/900-capacity case, cutoff rejection, priority ordering, and cost impact, and reconcile the Operations proposal's Scenario 3 remainder counts with the configured service-level order before fixing fixture expectations (operations-impact-analysis requirement: Assess package load redistribution within operational constraints; ARD-OPS-009, ARD-TST-006, ARD-TST-009).
+
+## 3. Operations Agent and Degraded Results
+
+- [x] 3.1 Implement the ADK Operations specialist boundary to assess Controller-supplied candidates and return a validated domain result without orchestration, compliance gating, weighted ranking, or final report generation; stub the model boundary and test structured outputs, evidence/assumption separation, and material customer trade-offs (operations-impact-analysis requirement: Return a structured Operations assessment for Controller aggregation; ARD-SYS-001..003, ARD-OPS-005, ARD-OPS-007, ARD-TEC-002, ARD-TEC-005, ARD-TST-003).
+- [x] 3.2 Implement configured timeouts, bounded/idempotent retries, structured adapter failures, and visible partial/provisional/escalated outputs for missing, stale, conflicting, or unavailable evidence; test confidence thresholds, timeout, conflict, and no success-shaped fallback (operations-impact-analysis requirement: Represent uncertainty, conflict, and degraded analysis; ARD-OPS-006, ARD-PRN-006, ARD-GOV-001..005, ARD-RES-002..007, ARD-NFR-001..002, ARD-TST-003).
+- [x] 3.3 Add and document typed settings for source freshness, impact thresholds, service-level ordering, timeouts, and mock cost line items; verify missing or invalid configuration fails visibly and supported defaults are documented (ARD-TEC-004, ARD-NFR-001..002, ARD-NFR-006..007, ARD-PRN-006).
+
+## 4. Security, Approval Boundary, and Observability
+
+- [x] 4.1 Enforce least-privilege tool allowlisting and read-only adapter interfaces; reject policy/tool override instructions in external content and prevent secret or unnecessary sensitive-data exposure; test malformed inputs, prompt injection, unauthorized tools, and absence of write operations (operations-impact-analysis requirement: Preserve advisory-only, read-only, and auditable boundaries; ARD-PRN-001..002, ARD-GOV-008, ARD-SEC-001..008, ARD-TST-005, ARD-TST-007).
+- [x] 4.2 Emit structured validation, tool, conflict, timeout, degraded-result, and completion events with required case/correlation/schema fields and redaction; test event shape, failure visibility, and traceability without private chain-of-thought (ARD-PRN-008, ARD-OBS-001..005, ARD-SEC-006..007, ARD-TST-001, ARD-TST-007).
+
+## 5. Integration and Retained Evidence
+
+- [x] 5.1 Add deterministic end-to-end mock fixtures for a feasible aircraft swap, a route/assignment conflict, constrained package redistribution, stale/conflicting evidence, and timeout; run focused pytest regression tests and map each scenario to its OpenSpec requirement and ARD ID (ARD-TST-001..003, ARD-TST-006, ARD-TST-008..009).
+- [x] 5.2 Run configured pytest, Ruff, and type checks for the capability; record commands, results, failures, and unresolved deferrals in repository evidence, verifying no tests use network, live operations systems, or real model calls (ARD-TEC-005, ARD-TEC-008..009, ARD-TST-008..009, ARD-OSP-004).
+- [x] 5.3 Retain reviewable AI-assisted-development and human-review evidence, a RAPID peer-review/Go-No-Go status record, and a sponsor-demonstration runbook with the mock scenarios and explicit limitations; verify these are evidence artifacts and do not claim framework installation or tests alone satisfy approval (ARD-TEC-019..020, ARD-PRN-001, ARD-GOV-006..008, ARD-OSP-004).

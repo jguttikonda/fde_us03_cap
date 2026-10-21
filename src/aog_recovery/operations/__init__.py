@@ -1,0 +1,1 @@
+"""Operations impact-analysis domain."""

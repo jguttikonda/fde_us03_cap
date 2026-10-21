@@ -52,6 +52,8 @@ Define typed read-only operations for:
 
 Requests and results use Pydantic validation and structured errors for invalid data, unavailable source, timeout, stale response, and conflict. Adapters expose no write methods. Implement local/mock adapters first. If an adapter crosses an MCP process or service boundary, use the supported MCP SDK and preserve the same typed validation, allowlisting, timeout, error, and audit behavior; do not add MCP as a requirement for an in-process mock (ARD-TEC-006, ARD-SEC-001..004).
 
+Expose the following allowlisted MCP tool contracts when an MCP boundary is deployed: `validate_flight_schedule`, `detect_route_conflicts`, `check_fleet_availability`, `apply_disruption_thresholds`, and `check_load_redistribution`. The last tool returns a proposed allocation and unprotected remainder only; it MUST NOT move packages or change flight assignments. Crew/station, customer-priority, disruption, and package-manifest reads remain typed adapter operations and may be composed behind these tools. `format_impact_payload` is a local deterministic normalization step, not an operational API tool. In-process tests use the same typed contracts with deterministic mock adapters and do not require an MCP server (ARD-TEC-006, ARD-SEC-002, ARD-TST-002, ARD-TST-009).
+
 ### Deterministic evaluation
 
 - Validate required fields, source timestamps, and configured freshness limits before calculating impact. Treat missing freshness metadata as unavailable freshness evidence, not as current data.

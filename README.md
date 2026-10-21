@@ -124,6 +124,32 @@ VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace
 interpreter at `.venv\Scripts\python.exe` or reload the window.
 
+### Operations analysis settings
+
+Operations settings use the `AOG_` environment prefix and are validated by
+`AogSettings`. Defaults are for deterministic local/mock analysis only; mock
+costs are illustrative and are not estimates of real operating expenses.
+
+| Setting | Default | Purpose |
+|---|---:|---|
+| `AOG_TOOL_TIMEOUT_SECONDS` | `10` | Timeout for each read-only adapter call |
+| `AOG_AGENT_TIMEOUT_SECONDS` | `30` | Timeout for bounded Operations reasoning |
+| `AOG_OPERATIONS_MAX_READ_RETRIES` | `1` | Maximum retries for retryable idempotent reads |
+| `AOG_OPERATIONS_SOURCE_FRESHNESS_SECONDS` | `900` | Maximum source age before evidence is treated as stale |
+| `AOG_OPERATIONS_MEDIUM_DELAY_MINUTES` | `30` | Lower bound for medium operational impact |
+| `AOG_OPERATIONS_HIGH_DELAY_MINUTES` | `120` | Lower bound for high operational impact |
+| `AOG_OPERATIONS_CRITICAL_DELAY_MINUTES` | `300` | Lower bound for critical operational impact |
+| `AOG_OPERATIONS_SERVICE_LEVEL_ORDER` | `["priority","standard"]` | Stable package-allocation priority, encoded as JSON |
+| `AOG_OPERATIONS_CONFIDENCE_DEGRADATION_PER_ISSUE` | `0.10` | Confidence reduction for each distinct missing/degraded issue |
+| `AOG_OPERATIONS_MOCK_COST_CURRENCY` | `USD` | Currency for mock line items |
+| `AOG_OPERATIONS_MOCK_DELAY_COST_PER_MINUTE` | `1.00` | Illustrative delay cost rate |
+| `AOG_OPERATIONS_MOCK_SWAP_FLAT_COST` | `500.00` | Illustrative aircraft-swap cost |
+| `AOG_OPERATIONS_MOCK_UNPROTECTED_PACKAGE_EXPOSURE` | `2.00` | Illustrative exposure per unprotected package |
+
+Impact thresholds must be strictly increasing, and the service-level order must
+be non-empty with no duplicate names. An unset optional cost rate makes the
+corresponding estimate unavailable; it is not silently treated as zero.
+
 ## Project Status
 This repository is currently in the proposal and architecture design phase for an enterprise AOG decision-support system.
 

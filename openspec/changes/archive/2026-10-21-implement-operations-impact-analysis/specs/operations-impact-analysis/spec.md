@@ -44,7 +44,7 @@ The capability MUST assess package redistribution using capacity by aircraft tai
 
 #### Scenario: Capacity and cut-off permit partial redistribution
 - **WHEN** an affected flight has 1,200 packages including 700 priority packages, a spare aircraft has capacity for 900, and redistribution is within the applicable sort and cut-off window
-- **THEN** the result protects no more than 900 packages using the configured deterministic service-level priority, reports the remaining 300 as unprotected, and includes the unprotected exposure in the option impact and cost (ARD-OPS-009, ARD-TST-006)
+- **THEN** the result protects all 700 priority packages and no more than 200 other packages, reports the remaining 300 packages as unprotected by service level, and includes their exposure in the option impact and cost (ARD-OPS-009, ARD-TST-006)
 
 #### Scenario: Alternate flight is past cut-off
 - **WHEN** an alternate flight has spare capacity but the package arrival would miss its cut-off
@@ -67,6 +67,10 @@ The capability MUST label incomplete or time-sensitive analysis provisional, app
 #### Scenario: Conflicting operational evidence
 - **WHEN** two current sources disagree materially about a schedule, route, assignment, or recovery time
 - **THEN** the result identifies both conflicting values and their provenance, marks the affected conclusion provisional or escalated, and defers approval regardless of numeric confidence (ARD-OPS-006, ARD-PRN-006, ARD-GOV-004)
+
+#### Scenario: Maintenance and Operations recovery estimates conflict
+- **WHEN** a Controller-supplied Maintenance return-to-service estimate materially conflicts with the Operations schedule or disruption evidence for the same recovery option
+- **THEN** the result preserves both estimates with their sources, marks the affected option provisional or escalated, and identifies the conflict for Controller and human review without invoking another agent or resolving the conflict by assumption (ARD-OPS-006, ARD-PRN-006, ARD-GOV-004, ARD-TST-006)
 
 #### Scenario: Low confidence requires escalation
 - **WHEN** analysis confidence is below 0.50
