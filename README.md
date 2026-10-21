@@ -77,6 +77,27 @@ This project aims to:
 - [docs/proposal.md](docs/proposal.md) — detailed architecture and proposal document
 - [docs/agent-proposals](docs/agent-proposals) — specialist agent design proposals
 
+## Development Setup
+
+The project requires Python 3.14 and uses `uv` to create an isolated environment
+and install the Google ADK, Pydantic, and development tools declared in
+`pyproject.toml`.
+
+From the repository root in PowerShell:
+
+```powershell
+uv sync --all-groups
+uv run python --version
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src
+```
+
+VS Code is configured to use `.venv` and discover pytest tests. If its Python
+extension was already open when `.venv` was created, select the workspace
+interpreter at `.venv\Scripts\python.exe` or reload the window.
+
 ## Project Status
 This repository is currently in the proposal and architecture design phase for an enterprise AOG decision-support system.
 
