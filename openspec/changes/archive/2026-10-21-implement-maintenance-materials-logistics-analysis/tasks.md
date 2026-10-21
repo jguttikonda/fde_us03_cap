@@ -1,0 +1,36 @@
+# Tasks
+
+## 1. Domain Contracts and Runtime Boundaries
+
+- [x] 1.1 Add the supported MCP Python SDK dependency for the scoped process/service tool boundary, update `uv.lock` and the locked requirements export, and document the in-process mock versus MCP transport boundary; verify `uv sync --all-groups --locked` and dependency imports succeed (ARD-TEC-006, ARD-TEC-010..014, ARD-SYS-007..009).
+- [x] 1.2 Create separated Maintenance, Materials & Logistics, and peer-coordination package boundaries without changing Controller behavior; verify each package imports and `uv run mypy src` accepts the typed module structure (ARD-TEC-002, ARD-NFR-004, ARD-SYS-003).
+- [x] 1.3 Add versioned Pydantic domain payloads for repairability/root cause/ground time/approval evidence and for availability/authorization/sourcing/cost/ETA; test valid, missing, invalid, unsupported-version, and unknown-evidence cases and document the payload fields (ARD-DAT-001, ARD-DAT-004..011, ARD-MNT-003..005/010, ARD-MLG-003..006).
+
+## 2. Maintenance Assessment
+
+- [x] 2.1 Implement Maintenance input validation for case, aircraft, work-order, engineering, safety, and part-dependency evidence; test required-field findings, missing-work-order provisional behavior, and rejection of unsupported or untrusted inputs (ARD-MNT-001..002/007, ARD-DAT-009, ARD-SEC-004, ARD-GOV-005).
+- [x] 2.2 Implement the bounded Prompt A/B/C Maintenance analysis over validated evidence and return the shared `AgentResult` envelope with a typed Maintenance payload; use a mocked model boundary and test output normalization, domain scope, evidence references, confidence, and no airworthiness certification claims (ARD-TEC-002/005, ARD-MNT-005..006, ARD-PRN-004..005, ARD-SEC-008).
+- [x] 2.3 Implement deterministic root-cause evidence references and recurring-failure counting for the configured threshold/window, including the three-in-90-days example and preferred-part request; test boundary counts, incomplete history, stale records, and provenance retention (ARD-MNT-009..010, ARD-DAT-004..006, ARD-NFR-003).
+- [x] 2.4 Implement repairability, required actions, ground-time, need-by comparison, labor-cost estimate, and return-to-service calculation using the documented parts-gate ETA assumption; report engineering/airworthiness status as evidence only and keep missing approvals uncertain/escalated; test supported, missing, stale, and conflicting cases (ARD-MNT-003..008/010, ARD-GOV-003..005/008, ARD-SEC-008).
+- [x] 2.5 Add focused Maintenance contract and behavior tests for feasible/uncertain/not-feasible results, missing work orders, conflict visibility, recurrence, human approval status, and no write/approval behavior; map each test to its requirement (ARD-TST-001..003/005/007/009, ARD-RUB-002..004).
+
+## 3. Materials & Logistics Sourcing
+
+- [x] 3.1 Implement typed role-allowlisted read-only maintenance-record, inventory, alternate-parts, transfer, supplier, and shipping adapters, with Google ADK tool integration and MCP SDK transport only at the scoped process boundary; test input validation, authorization, deterministic mocks, and absence of write methods (ARD-TEC-002/006, ARD-SYS-007..009, ARD-SEC-001..005, ARD-TST-002/007).
+- [x] 3.2 Implement deterministic availability, minimum-threshold, location-consistency, compatibility, authorization, and traceability checks; test physical-versus-practical stock and ensure an unauthorized or unknown alternate cannot be marked eligible (ARD-MLG-001..004/008, ARD-CTL-017, ARD-SEC-004).
+- [x] 3.3 Implement original/preferred-part comparison and separate transfer, borrow/pool, vendor-purchase, and expedite quotes with FedEx Network priority-freight/courier and commercial-carrier costs/ETAs in mock USD; test deterministic arithmetic, source/assumption retention, and unknown quote fields without business defaults (ARD-MLG-005..006/009, ARD-SYS-004, ARD-NFR-003, ARD-DAT-005).
+- [x] 3.4 Implement stale/cache labels, source provenance, warning propagation, the configured confidence reduction, and explicit unavailable/timeout/malformed/partial/conflicting outcomes; test stale data lowers confidence, failures are not success-shaped, retries remain bounded/idempotent if used, and no operational sourcing action is invoked (ARD-MLG-007, ARD-RES-001/003..006, ARD-GOV-003..005, ARD-SEC-001..007).
+- [x] 3.5 Add focused Materials & Logistics contract, tool, failure, and sourcing tests for each status and method, with synthetic fixtures and requirement-to-test mapping; verify no live airline/vendor/carrier service is required (ARD-TST-001..003/007/009, ARD-SYS-008, ARD-NFR-005, ARD-RUB-001..004).
+- [x] 3.6 Implement the bounded Google ADK Materials & Logistics specialist over validated source evidence; return the shared `AgentResult` and typed payload while deterministic availability, eligibility, quote, and ETA fields remain authoritative; test fake-runner stage order, valid/invalid outputs, missing/stale/conflicting/failure propagation, no ranking/action, and update requirement-to-test traceability (ARD-PRN-003..005, ARD-MLG-001..009, ARD-GOV-003..005/008, ARD-RES-003..006, ARD-TEC-002/005, ARD-TST-003/007).
+
+## 4. H3/H4 Peer Coordination
+
+- [x] 4.1 Implement versioned H3/H4 request and response contracts carrying case, exchange, trace/correlation, source, timestamp, status, failed/preferred part, station, need-by, evidence references, and explicit degradation; test round-trip shape and malformed/mismatched identifiers (ARD-SYS-004, ARD-DAT-003..010, ARD-MNT-009, ARD-MLG-009).
+- [x] 4.2 Implement the append-only Controller-context recorder port and deterministic in-memory test adapter; test request-before-response ordering, idempotent exchange IDs, case isolation, and visible incomplete status when recording fails (ARD-SYS-002/004, ARD-OBS-001..003, ARD-SEC-009, ARD-RES-003..007).
+- [x] 4.3 Connect the Maintenance H3 request to the Materials & Logistics H4 comparison without adding Controller routing or ranking; test the P-110/P-120 three-failures-in-90-days path, incomplete/stale/conflicting source results, and Controller-facing conflict preservation (ARD-SYS-003..004, ARD-MNT-008..009, ARD-MLG-009, ARD-CTL-007..008, ARD-GOV-004..005).
+
+## 5. Integration and Retained Evidence
+
+- [x] 5.1 Add integrated synthetic scenarios running both specialists through fake ADK boundaries, Materials & Logistics sourcing, and recorded H3/H4 exchange; verify normal and degraded outcomes, confidence/unknown propagation, audit correlation, and no automatic approval or operational side effect (ARD-TST-001..003/005/007/009, ARD-PRN-001..008, ARD-OBS-001..004).
+- [x] 5.2 Run and retain `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy src`; document actual outputs, any residual issue, and the modified-file/test inventory suitable for human peer review (ARD-TST-001/008, ARD-TEC-009, ARD-RUB-002..004).
+- [x] 5.3 Update requirement-to-model-to-test traceability and retain a synthetic H3/H4 demonstration scenario plus inspectable AI-assisted iteration evidence; clearly leave RAPID sign-off, Go/No-Go, sponsor delivery/live Q&A, and final operational/airworthiness approval to people (ARD-TST-001, ARD-TEC-019..020, ARD-RUB-005..011).

@@ -61,9 +61,36 @@ permissions, transport and timeout behavior, and security verification. It must
 preserve the typed read-only protocol and must not add operational write
 capabilities.
 
+In-process local/mock tools use the typed adapter interface directly and do not
+start an MCP transport. When a tool crosses a process or service boundary, use
+the supported MCP Python SDK through the Google ADK integration, preserving the
+same request/result contracts, allowlists, timeouts, correlation, and explicit
+failure behavior.
+
 ## Runtime Settings
 
 Settings are loaded from `AOG_`-prefixed environment variables. Adapter mode is
 local-only in this foundation; timeout values are bounded and confidence
 thresholds are validated for ordering. An optional provider secret is held as a
 secret type and excluded from representations and serialized settings.
+
+## Specialist Payload Models
+
+Maintenance payloads carry a schema version, repairability, root-cause and
+recurrence evidence, preferred-part references, required actions, ground-time
+and return-to-service fields, need-by comparison, labor-cost estimate, risks,
+assumptions, missing data, and engineering-approval evidence. A feasible status
+requires source-backed approval evidence; it does not mean the agent approved
+or certified the repair.
+
+Maintenance timing inputs may include a need-by timestamp and an H4 parts-ready
+timestamp. Each supplied time requires a source evidence reference; the final
+agent result carries those references so derived return-to-service calculations
+remain traceable.
+
+Materials & Logistics payloads carry availability status, per-part quantity,
+location, source, retrieval time and validity, separate compatibility,
+authorization and traceability evidence, plus per-path sourcing method,
+shipping provider/service, lead time, ETA, and mock USD cost. Unknown values
+remain explicit; known eligibility states and incomplete quotes require source
+references or an unavailable reason.

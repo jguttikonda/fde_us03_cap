@@ -1,0 +1,14 @@
+# Materials & Logistics Test Traceability
+
+| Requirements | Model / implementation | Test evidence |
+|---|---|
+| ARD-DAT-001/004/009, ARD-MLG-001/007, ARD-GOV-005 | `MaterialsLogisticsAssessmentPayload`, `PartAvailabilityRecord`, `PartEligibilityEvidence` | `tests/contracts/test_materials_logistics.py::test_versioned_contract_preserves_unknown_threshold_and_eligibility`; `test_contract_rejects_invalid_quantity_and_unsupported_schema` |
+| ARD-MLG-002/008, ARD-DAT-005/009, ARD-SEC-004 | `PartEligibilityEvidence`, `SourcingOption` | `test_known_eligibility_requires_source_references`; `test_incomplete_quote_requires_reason_instead_of_a_cost_default` |
+| ARD-TEC-002/006, ARD-SYS-007..009, ARD-SEC-001..003, ARD-TST-002/007 | `MaterialsReadRequest`, `LocalMaterialsReadOnlyAdapter`, `build_materials_adk_tools`, `build_materials_mcp_toolset` | `tests/adapters/test_materials_tools.py::test_each_materials_source_has_a_typed_read_request_and_role_allowlist`; `test_adk_and_mcp_tools_are_limited_to_the_callers_allowlist` |
+| ARD-PRN-003..006, ARD-MLG-001..009, ARD-GOV-003..005/008, ARD-RES-003..006, ARD-TEC-002/005, ARD-TST-003/007 | `MaterialsLogisticsAgent`, `MaterialsLogisticsAssessmentInput`, `MaterialsFinalOutput`, `MaterialsLogisticsAgentPayload` | `tests/adapters/test_materials_agent.py` |
+| ARD-MLG-001..004/008, ARD-CTL-017, ARD-GOV-005 | `evaluate_materials_availability`, `PartReadinessAssessment` | `tests/adapters/test_materials_availability.py` |
+| ARD-MLG-005..006/009, ARD-SYS-004, ARD-NFR-003, ARD-DAT-005 | `SourcingQuoteInput`, `calculate_sourcing_option`, `compare_requested_parts` | `tests/adapters/test_materials_sourcing.py::test_quote_arithmetic_is_deterministic_and_preserves_source_assumptions`; `test_sourcing_paths_keep_method_and_carrier_separate`; `test_failed_and_preferred_parts_are_compared_without_omitting_missing_data` |
+| ARD-MLG-007, ARD-RES-001/003..006, ARD-GOV-003..005, ARD-SEC-001..007 | `MaterialsEvidenceSummary`, `summarize_materials_evidence`, `materials_stale_confidence_penalty` | `tests/adapters/test_materials_degradation.py` |
+| ARD-TST-003/005..007/009, ARD-PRN-001..008, ARD-SYS-004, ARD-OBS-001..004, ARD-MNT-009, ARD-MLG-007/009 | `H3ReplacementStrategyRequest`, `H4AvailabilityResponse`, `H3H4Exchange`, `coordinate_h3_h4`, `InMemoryCaseContextRecorder` | `tests/integration/test_specialist_workflow.py::test_both_specialists_complete_synthetic_a2a_with_correlated_audit`; `test_stale_materials_evidence_reaches_integrated_h4_without_approval` |
+
+All fixtures are synthetic. Adapter tests instantiate the ADK MCP toolset but do not open a session, spawn a server, or call an airline, vendor, supplier, or carrier endpoint. Materials source objects expose read methods only; no purchasing, reservation, transfer, or shipping action is invoked.
