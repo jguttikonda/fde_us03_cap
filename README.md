@@ -126,6 +126,9 @@ interpreter at `.venv\Scripts\python.exe` or reload the window.
 
 ### Operations analysis settings
 
+For an interactive peer-review demo using synthetic fixtures and live Gemini
+reasoning, see [the ADK Web runbook](docs/operations-adk-web-peer-review.md).
+
 Operations settings use the `AOG_` environment prefix and are validated by
 `AogSettings`. Defaults are for deterministic local/mock analysis only; mock
 costs are illustrative and are not estimates of real operating expenses.

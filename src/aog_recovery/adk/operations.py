@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 from google.adk.agents import LlmAgent
@@ -5,6 +6,8 @@ from google.adk.models import BaseLlm
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
+from pydantic import ConfigDict, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from aog_recovery.operations.agent import (
     OperationsReasoner,
@@ -37,6 +40,39 @@ Prompt C — Output validation:
 """.strip()
 
 
+class OperationsReasoningJsonInput(OperationsReasoningInput):
+    """Restore JSON semantics after ADK decodes arrays (ARD-TEC-003/005)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_json_transport(cls, value: object) -> object:
+        if isinstance(value, dict):
+            validated = OperationsReasoningInput.model_validate_json(json.dumps(value))
+            return validated.model_dump()
+        return value
+
+
+def _provider_output_schema(schema: JsonSchemaValue) -> None:
+    # Some Gemini endpoints reject this JSON Schema keyword; local validation stays strict.
+    schema.pop("additionalProperties", None)
+
+
+class OperationsReasoningJsonOutput(OperationsReasoningOutput):
+    model_config = ConfigDict(json_schema_extra=_provider_output_schema)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_json_transport(cls, value: object) -> object:
+        if isinstance(value, dict):
+            validated = OperationsReasoningOutput.model_validate_json(json.dumps(value))
+            return validated.model_dump()
+        return value
+
+
+class OperationsReasoningError(RuntimeError):
+    """An ADK reasoning event failed before returning validated output."""
+
+
 def create_operations_reasoning_agent(model: str | BaseLlm) -> LlmAgent:
     return LlmAgent(
         name="operations_impact_analyst",
@@ -45,8 +81,8 @@ def create_operations_reasoning_agent(model: str | BaseLlm) -> LlmAgent:
         ),
         model=model,
         instruction=OPERATIONS_REASONING_INSTRUCTION,
-        input_schema=OperationsReasoningInput,
-        output_schema=OperationsReasoningOutput,
+        input_schema=OperationsReasoningJsonInput,
+        output_schema=OperationsReasoningJsonOutput,
         tools=[],
         include_contents="none",
         disallow_transfer_to_parent=True,
@@ -82,6 +118,10 @@ class AdkOperationsReasoner(OperationsReasoner):
             session_id=session_id,
             new_message=message,
         ):
+            if event.error_code:
+                raise OperationsReasoningError(
+                    f"Google ADK Operations reasoning failed: {event.error_code}"
+                )
             if not event.is_final_response():
                 continue
             if event.content is None:
