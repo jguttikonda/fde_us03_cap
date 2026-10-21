@@ -16,6 +16,8 @@ from aog_recovery.contracts.evidence import (
     EvidenceWarning,
     Unknown,
 )
+from aog_recovery.contracts.readiness import EtaBasis as EtaBasis
+from aog_recovery.contracts.readiness import ReadinessEstimate
 from aog_recovery.validation.confidence import ConfidenceAssessment, ConfidenceDisposition
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -40,11 +42,6 @@ class OptionKind(StrEnum):
     DELAY = "delay"
 
 
-class EtaBasis(StrEnum):
-    CONFIRMED = "confirmed"
-    ESTIMATED = "estimated"
-
-
 class CandidateOption(ContractModel):
     option_id: NonEmptyString
     kind: OptionKind
@@ -52,6 +49,24 @@ class CandidateOption(ContractModel):
     readiness_eta: datetime | None = None
     eta_basis: EtaBasis | None = None
     eta_evidence_references: tuple[NonEmptyString, ...] = ()
+
+    @classmethod
+    def with_readiness(
+        cls,
+        option_id: str,
+        kind: OptionKind,
+        description: str,
+        estimate: ReadinessEstimate,
+    ) -> CandidateOption:
+        """Build a candidate from the shared estimate Maintenance or M&L supplies."""
+        return cls(
+            option_id=option_id,
+            kind=kind,
+            description=description,
+            readiness_eta=estimate.eta,
+            eta_basis=estimate.basis,
+            eta_evidence_references=estimate.evidence_references,
+        )
 
     @field_validator("readiness_eta")
     @classmethod

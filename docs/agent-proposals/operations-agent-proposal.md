@@ -141,49 +141,97 @@ Return only a structured output with:
 ```
 
 ## 8. Expected Output Standard Format
+This is the implemented payload (`OperationsAssessment`, carried in `AgentResult.role_payload`, `schema_version` 1.0). Mapping from the earlier draft: `recovery_options[].option` -> `kind`, `estimated_impact` -> `impact_level`, `estimated_cost_usd` -> `cost.total_usd`. `recommendation.decision` adds `defer_to_controller` (several viable options; ranking stays with the Controller, ARD-SYS-005). Enum values: `impact_level` low|medium|high|critical; `viability` viable|viable_with_risk|not_viable|undetermined; `kind` repair_original|repair_alternate|swap|delay; `carrier_type` own|partner; allocation `path` held_on_original_aircraft|substitute_aircraft|own_network_flight|partner_flight.
 ```json
 {
+  "schema_version": "1.0",
   "agent_name": "Operations Agent",
-  "operational_impact_level": "low|medium|high|critical",
+  "operational_impact_level": "low|medium|high|critical|null",
   "summary": "Short summary of the flight, package, schedule, and fleet impact",
-  "affected_routes": ["Route 1", "Route 2"],
+  "affected_routes": ["MIA-ORD"],
   "package_impact": {
+    "assessed": true,
     "affected_package_count": 0,
     "time_critical_package_count": 0,
-    "service_commitments_at_risk": ["Commitment 1"],
-    "load_redistribution": {
-      "packages_redistributable": 0,
-      "packages_unprotected": 0,
-      "target_flights_or_aircraft": ["Flight/aircraft 1"],
-      "capacity_constraints": ["Constraint 1"]
-    },
-    "summary": "Summary of package and customer impact"
+    "summary": "Baseline package exposure"
   },
+  "available_flights": [
+    {
+      "flight_number": "FX505", "carrier_type": "own", "carrier_name": "Company Express",
+      "origin": "MIA", "destination": "ORD",
+      "departure_at": "ISO-8601", "arrival_at": "ISO-8601",
+      "available_capacity": 0, "cost_per_package_usd": 0,
+      "accepted_service_levels": ["priority", "standard"],
+      "booking_deadline": "ISO-8601|null",
+      "bookable": true, "restriction": "reason it cannot be used|null"
+    }
+  ],
   "recovery_options": [
     {
-      "option": "repair_original|repair_alternate|swap|delay",
-      "estimated_impact": "Low / Medium / High",
-      "estimated_cost_usd": 0,
+      "option_id": "OPT-1", "kind": "repair_original|repair_alternate|swap|delay",
+      "viability": "viable|viable_with_risk|not_viable|undetermined",
+      "impact_level": "low|medium|high|critical|null",
+      "threshold_rule": "delay_threshold_high+uplift:service_critical_flight",
+      "schedule_delay_minutes": 0,
+      "earliest_feasible_departure": "ISO-8601|null",
+      "substitute_aircraft_id": "N980FX|null",
+      "package": {
+        "assessed": true, "reroute_assessed": true,
+        "affected_package_count": 0, "time_critical_package_count": 0,
+        "held_in_place_count": 0, "redistributed_count": 0,
+        "own_flight_count": 0, "partner_flight_count": 0,
+        "unprotected_count": 0, "unprotected_time_critical_count": 0,
+        "allocations": [
+          {
+            "group_id": "FX103-PRIORITY",
+            "path": "held_on_original_aircraft|substitute_aircraft|own_network_flight|partner_flight",
+            "target_id": "FX505", "carrier_name": "Company Express|null",
+            "departure_at": "ISO-8601|null", "count": 0, "cost_usd": 0
+          }
+        ],
+        "capacity_constraints": ["Constraint 1"],
+        "service_commitments_at_risk": ["Commitment 1"]
+      },
+      "cost": {
+        "delay_usd": 0, "swap_usd": 0, "rerouting_usd": 0,
+        "unprotected_packages_usd": 0, "total_usd": 0, "complete": true
+      },
+      "conflict_ids": ["conflict-1"],
+      "missing_inputs": ["readiness ETA for OPT-1"],
       "rationale": "Why this option is plausible"
     }
   ],
-  "risk_factors": [
-    "Risk 1",
-    "Risk 2"
+  "risk_factors": ["Risk 1"],
+  "assumptions": ["Assumption 1"],
+  "missing_data": ["Missing input 1"],
+  "missing_analysis": ["Analysis not performed 1"],
+  "conflicts": [
+    {
+      "conflict_id": "conflict-1", "code": "crew_coverage_gap|aircraft_double_booked|time_estimate_conflict",
+      "option_id": "OPT-1", "resource_ids": ["FX103", "crew:FX103"], "description": "..."
+    }
   ],
-  "assumptions": [
-    "Assumption 1",
-    "Assumption 2"
-  ],
+  "warnings": ["CODE: message"],
+  "trade_offs": ["Trade-off 1"],
+  "requires_human_selection": false,
   "recommendation": {
-    "decision": "repair_original|repair_alternate|swap|delay|escalate",
+    "decision": "repair_original|repair_alternate|swap|delay|defer_to_controller|escalate",
+    "viable_option_ids": ["OPT-1"],
     "confidence": 0.0,
-    "reasoning": "Why this operational path is preferred",
-    "next_steps": ["Step 1", "Step 2"]
-  }
+    "reasoning": "Why this operational path is viable",
+    "next_steps": ["Step 1"]
+  },
+  "confidence": 0.0,
+  "confidence_disposition": "preferred|provisional|escalation_required",
+  "confidence_reasons": ["Reason confidence was reduced"],
+  "reasoner_mode": "deterministic_offline",
+  "advisory_only": true,
+  "human_approval_required": true
 }
 ```
 
+### 8.0 Input from Maintenance and Materials & Logistics
+The Controller (H6) passes each candidate with a shared `ReadinessEstimate` (`contracts/readiness.py`): an absolute timezone-aware `eta`, `basis` (confirmed|estimated), optional `window_start`/`window_end`, and at least one evidence reference. M&L `eta_hours` is anchored with `ReadinessEstimate.from_lead_time_hours(as_of, hours, ...)`; a stated time window uses `ReadinessEstimate.from_window(...)`, which plans on the window end and marks the ETA estimated. For repair options the Maintenance return-to-service ETA is the value passed; the M&L parts-ready ETA is cited as evidence. `CandidateOption.with_readiness(...)` builds the Operations candidate from it.
 ## 9. Deterministic Responsibilities
 - Validate flight and schedule data
 - Detect route conflicts and aircraft assignment issues

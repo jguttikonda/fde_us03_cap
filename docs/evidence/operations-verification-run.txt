@@ -1,10 +1,10 @@
-Operations verification run - 2026-10-21T14:15:35
+Operations verification run - 2026-10-21T15:03:58
 
 == uv run pytest -q --cov=aog_recovery.operations --cov-report=term-missing ==
-........................................................................ [ 26%]
-........................................................................ [ 53%]
-........................................................................ [ 80%]
-.....................................................                    [100%]
+........................................................................ [ 25%]
+........................................................................ [ 50%]
+........................................................................ [ 76%]
+....................................................................     [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\google\genai\types.py:42
   C:\LabFiles\WA3922-CAP\LabFiles\capstone-project\AOG-Cordinator\.venv\Lib\site-packages\google\genai\types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17
@@ -19,26 +19,23 @@ Name                                       Stmts   Miss  Cover   Missing
 src\aog_recovery\operations\__init__.py        0      0   100%
 src\aog_recovery\operations\adk_agent.py      14      0   100%
 src\aog_recovery\operations\agent.py         229      1    99%   615
-src\aog_recovery\operations\demo.py           76      5    93%   64-67, 145
+src\aog_recovery\operations\demo.py           97      6    94%   66-69, 144, 171
 src\aog_recovery\operations\gateway.py        71      0   100%
-src\aog_recovery\operations\models.py        178      1    99%   99
+src\aog_recovery\operations\models.py        180      1    99%   114
 src\aog_recovery\operations\prompts.py         5      0   100%
 src\aog_recovery\operations\reasoning.py      65      0   100%
 src\aog_recovery\operations\rules.py         247      1    99%   208
 src\aog_recovery\operations\settings.py       38      0   100%
 src\aog_recovery\operations\synthetic.py      58      0   100%
 ------------------------------------------------------------------------
-TOTAL                                        981      8    99%
-269 passed, 1 warning in 3.16s
+TOTAL                                       1004      9    99%
+284 passed, 1 warning in 4.31s
 
 == uv run ruff check . ==
 All checks passed!
 
-== uv run ruff format --check . ==
-165 files already formatted
-
 == uv run mypy ==
-Success: no issues found in 34 source files
+Success: no issues found in 35 source files
 
-== openspec validate implement-operations-impact-analysis --strict ==
+== openspec validate ==
 Change 'implement-operations-impact-analysis' is valid

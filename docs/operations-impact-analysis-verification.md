@@ -8,7 +8,7 @@ Python 3.14.7, Google ADK 2.12.0, Pydantic 2.14.1, pytest 9.1.1, Ruff 0.17.1, my
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite (74 foundation + 195 operations) | `uv run pytest` | 269 passed |
+| Full suite (foundation + readiness contract + operations) | `uv run pytest` | 284 passed |
 | Operations coverage | `--cov=aog_recovery.operations` | 99% (8 of 886 statements) |
 | Lint / format | `uv run ruff check .` / `ruff format --check .` | passed / 165 files formatted |
 | Types | `uv run mypy` | no issues in 34 source files |
@@ -38,6 +38,7 @@ Offline demonstration: `uv run python -m aog_recovery.operations.demo [scenario]
 | ARD-SEC-006..009, ARD-OBS-001..004 | correlated redacted `AuditEvent`s | `test_ops_agent.py::test_audit_events_*`, `test_ops_security_and_gate.py` redaction |
 | ARD-PRN-001..004, ARD-GOV-008, ARD-SEC-008, ARD-TST-005 | advisory literals, guardrail, no write surface | `test_ops_reasoning.py`, `test_ops_security_and_gate.py` human-gate tests |
 | ARD-TEC-002/005, ARD-TST-009 | `adk_agent.py`, `prompts.py` | `test_ops_adk_and_demo.py`, `test_ops_reasoning.py::test_prompt_stage_outputs_*`, no-network tests |
+| ARD-DAT-004 (ETA handoff from Maintenance and M&L) | shared `contracts/readiness.py` (`ReadinessEstimate`, window and lead-time helpers), `CandidateOption.with_readiness` | `tests/contracts/test_readiness_contract.py`; `tests/operations/test_ops_proposal_payload.py` (proposal payload equals the implemented models) |
 | ARD-DAT-004, ARD-CTL-006 | evidence ids and ETA references resolve | `test_ops_agent.py::test_result_envelope_passes_shared_validation_*` |
 
 ## AI-assisted development notes

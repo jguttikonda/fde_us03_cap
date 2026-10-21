@@ -48,3 +48,8 @@
 - [x] 9.3 Extend `check_load_redistribution` to allocate by route, service level, cut-off, and capacity onto own and partner flights with per-allocation path, carrier, departure, and cost, and price rerouting in the cost breakdown; test own-before-partner, service-level restriction, unusable flights, different route, substitute-then-reroute, and cost sums (ARD-OPS-009, ARD-CTL-019).
 - [x] 9.4 Fetch the alternate-flight source in the agent; expose `available_flights`, per-option reroute plans, partner-booking risk and next step; treat a flight-search outage as named missing analysis, upper-bound unprotected counts, incomplete cost, and reduced confidence; test own-first, own-only policy, cost cap, and outage (ARD-RES-002/004/006, ARD-GOV-005, Spec: Own-network and partner flight sourcing for package rerouting).
 - [x] 9.5 Add `partner_reroute` and `own_network_only` synthetic scenarios and show the policy, flights found, and reroute plan in the demonstration and ADK web demo (ARD-TST-009).
+
+## 10. Cross-Agent Readiness (Maintenance and Materials & Logistics handoff)
+
+- [x] 10.1 Add the shared `ReadinessEstimate` contract (absolute ETA, basis, optional window, evidence references; window end and lead-time helpers) and `CandidateOption.with_readiness`; test windows, hours, invalid inputs, and Operations use (ARD-DAT-004/005, ARD-GOV-005).
+- [x] 10.2 Replace the draft Operations output format in the agent proposal with the implemented payload and add a test that the documented keys equal the models (ARD-RUB-004, ARD-OSP-002).
