@@ -6,7 +6,7 @@ This document is a detailed draft for the Controller Agent and supplements the r
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Controller Agent is the orchestration layer for the AOG recovery workflow. It receives the incoming aircraft ground event, determines which specialist agents are required, coordinates the information flow, and produces the final recommendation for human approval.
+The Controller Agent is the orchestration layer for the AOG recovery workflow. It receives the incoming aircraft ground event, determines which specialist agents are required, coordinates the information flow, and produces the final recommendation for human approval. It addresses the business problem that no single system gives a consolidated view of an AOG event: the Controller gathers the partial views held by Maintenance, Materials, Logistics, and Operations into one explainable decision package, replacing manual coordination under time pressure.
 
 ## 2. Role in the System
 The Controller Agent is not a domain specialist. It is the workflow director that:

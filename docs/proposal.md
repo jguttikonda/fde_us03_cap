@@ -24,15 +24,23 @@ Key goals:
 
 # 2. Business Problem
 
-When an aircraft becomes AOG, multiple teams must coordinate quickly across technical and operational domains.
+When an aircraft becomes **Aircraft-On-Ground (AOG)**, every minute of downtime can impact flight schedules, aircraft utilization, customer commitments, and operational costs.
 
-Typical questions include:
-- Can the aircraft be repaired?
-- Is the required part available?
-- Can another aircraft be substituted?
-- What is the operational impact of delaying or rerouting flights?
+Recovering an AOG aircraft requires rapid coordination across multiple business domains, including Maintenance, Materials, Logistics, and Operations. Each team has access to a portion of the information needed to make a recovery decision, but no single system currently provides a consolidated view of the situation.
 
-Without a coordinated system, teams often work in silos, creating delays, duplicate analysis, and slower recovery decisions.
+As a result, personnel must manually gather information, consult multiple systems, coordinate with stakeholders, evaluate alternatives, and determine the best course of action under significant time pressure.
+
+Key decisions often include:
+- Can the aircraft be repaired within the required operational window?
+- Are the required parts available locally or at another station?
+- Should a part be transferred, purchased, borrowed, or expedited?
+- Is an aircraft swap a better recovery strategy?
+- What is the impact of each option on downstream flights and network operations?
+- Which option minimizes overall business disruption while maintaining operational compliance?
+
+Because these decisions involve competing objectives, changing operational conditions, and information distributed across multiple systems, recovery planning often depends on individual experience and manual coordination.
+
+The organization needs a more intelligent and collaborative decision-support capability that can rapidly evaluate recovery alternatives, provide explainable recommendations, and help reduce aircraft downtime while keeping humans fully in control of operational decisions.
 
 ---
 

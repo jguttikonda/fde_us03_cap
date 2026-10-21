@@ -17,7 +17,7 @@
 
 This Architecture Requirements Document (ARD) is the authoritative engineering baseline for the Aircraft-On-Ground (AOG) Recovery Coordinator. It converts the project proposal and agent drafts into uniquely identified, testable requirements that OpenSpec proposals, designs, specifications, and tasks must follow.
 
-The system coordinates specialized Maintenance, Inventory, Operations, and Report Creation agents through a Controller Agent. It evaluates recovery options and presents an explainable recommendation to a human decision-maker. It is an advisory system and does not execute operational actions.
+The system coordinates specialized Maintenance, Inventory, Operations, and Report Creation agents through a Controller Agent. It addresses the business problem that AOG recovery information is distributed across Maintenance, Materials, Logistics, and Operations with no consolidated view. It evaluates recovery options and presents an explainable recommendation to a human decision-maker. It is an advisory system and does not execute operational actions.
 
 ## 2. Source Documents and Precedence
 

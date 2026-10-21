@@ -16,12 +16,12 @@ The system is designed to support better decisions without replacing human accou
 
 ## What This Project Solves
 The capstone addresses a common airline operations problem:
-- aircraft are grounded unexpectedly
-- decisions are spread across several teams
-- information is partial or conflicting
-- recovery choices must balance technical feasibility, part availability, and operational impact
+- aircraft are grounded unexpectedly, and every minute of downtime affects schedules, utilization, customer commitments, and cost
+- recovery spans Maintenance, Materials, Logistics, and Operations, and each team holds only part of the information
+- no single system provides a consolidated view, so people gather data from multiple systems and coordinate manually under time pressure
+- recovery choices (repair, transfer, purchase, borrow or expedite a part, swap an aircraft) must balance technical feasibility, part availability, downstream flight and network impact, and operational compliance
 
-Without a coordinated system, teams can work in silos, causing longer downtime and slower recovery decisions.
+Because these decisions involve competing objectives, changing conditions, and distributed information, recovery planning often depends on individual experience and manual coordination. This project provides explainable decision support that helps reduce downtime while keeping humans fully in control of operational decisions.
 
 ## Core Business Idea
 The system recommends the most likely recovery path using specialized agents, each focused on a different domain:
