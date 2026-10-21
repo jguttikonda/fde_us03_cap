@@ -1,5 +1,7 @@
 """Offline demonstration: python -m aog_recovery.operations.demo [scenario ...] [--json].
 
+Use `--request my_incident.json` to assess your own request against the synthetic data.
+
 Runs the synthetic scenarios through the Operations Agent with the deterministic offline
 reasoner. No model, network, or live system is used (ARD-TST-009).
 """
@@ -9,7 +11,7 @@ import sys
 
 from aog_recovery.operations.agent import OperationsAgent
 from aog_recovery.operations.models import OperationsOutcome, OperationsRequest
-from aog_recovery.operations.synthetic import SCENARIOS, Scenario
+from aog_recovery.operations.synthetic import SCENARIOS, Scenario, default_adapters
 
 DEFAULT_ORDER = (
     "normal_repair",
@@ -127,9 +129,33 @@ def run_scenario(scenario: Scenario, as_json: bool = False) -> str:
     return "\n".join([*header, *_input_lines(scenario.request), *body, *footer])
 
 
+def run_request_file(path: str, as_json: bool = False) -> tuple[int, str]:
+    """Assess a hand-written request JSON file against the synthetic source data."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError) as error:
+        return 2, f"Cannot read request file: {error}"
+    outcome = OperationsAgent(default_adapters()).assess_payload(payload)
+    if not isinstance(outcome, OperationsOutcome):
+        findings = [f"  - {f.field_path}: {f.message}" for f in outcome.findings]
+        return 2, "Request rejected (nothing was assessed):\n" + "\n".join(findings)
+    if as_json:
+        return 0, json.dumps(outcome.result.model_dump(mode="json"), indent=2, sort_keys=True)
+    return 0, "\n".join(_output_lines(outcome))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     as_json = "--json" in args
+    if "--request" in args:
+        index = args.index("--request")
+        if index + 1 >= len(args):
+            print("--request needs a file path")
+            return 2
+        code, text = run_request_file(args[index + 1], as_json)
+        print(text)
+        return code
     names = [a for a in args if not a.startswith("--")] or list(DEFAULT_ORDER)
     unknown = [n for n in names if n not in SCENARIOS]
     if unknown:

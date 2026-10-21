@@ -549,3 +549,16 @@ def test_network_disruption_is_reported_as_a_risk_factor() -> None:
     assert outcome.assessment.risk_factors == (
         "Active weather disruption at ORD (severity medium)",
     )
+
+
+def test_assess_payload_accepts_json_strings_as_an_llm_or_human_would_send() -> None:
+    import json
+
+    scenario = scenario_normal_repair()
+    payload = json.loads(scenario.request.model_dump_json())
+    assert isinstance(payload["evaluated_at"], str)
+    outcome = OperationsAgent(scenario.adapters).assess_payload(payload)
+    assert isinstance(outcome, OperationsOutcome)
+    assert outcome.result.status is AgentResultStatus.COMPLETE
+    unserializable = OperationsAgent(scenario.adapters).assess_payload({"x": object()})
+    assert isinstance(unserializable, ValidationReport) and not unserializable.is_valid

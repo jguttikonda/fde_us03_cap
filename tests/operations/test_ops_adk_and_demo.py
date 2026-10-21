@@ -1,10 +1,11 @@
 import socket
+from pathlib import Path
 
 import pytest
 
 from aog_recovery.operations.adk_agent import build_operations_adk_agent
 from aog_recovery.operations.agent import OperationsAgent
-from aog_recovery.operations.demo import DEFAULT_ORDER, main, run_scenario
+from aog_recovery.operations.demo import DEFAULT_ORDER, main, run_request_file, run_scenario
 from aog_recovery.operations.prompts import OPERATIONS_INSTRUCTION
 from aog_recovery.operations.settings import OperationsSettings
 from aog_recovery.operations.synthetic import SCENARIOS, scenario_normal_repair
@@ -66,3 +67,20 @@ def test_demo_json_mode_and_cli(capsys: pytest.CaptureFixture[str], no_network: 
     full = capsys.readouterr().out
     for name in DEFAULT_ORDER:
         assert SCENARIOS[name]().title in full
+
+
+def test_hand_written_json_incident_file_is_assessed(capsys: pytest.CaptureFixture[str]) -> None:
+    example = str(Path(__file__).parents[2] / "incidents" / "my_incident.json")
+    assert main(["--request", example]) == 0
+    out = capsys.readouterr().out
+    assert "OPT-SWAP" in out and "Human approval required: True" in out
+    assert "NOT usable: partner cost per package exceeds the policy limit" in out
+
+
+def test_bad_incident_files_are_rejected_without_assessment(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"schema_version": "9"}', encoding="utf-8")
+    code, text = run_request_file(str(bad))
+    assert code == 2 and "Request rejected (nothing was assessed)" in text
+    assert run_request_file(str(tmp_path / "missing.json"))[0] == 2
+    assert main(["--request"]) == 2

@@ -66,7 +66,7 @@ from aog_recovery.operations.rules import (
     validate_flight_schedule,
 )
 from aog_recovery.operations.settings import OperationsSettings
-from aog_recovery.validation.boundaries import validate_contract
+from aog_recovery.validation.boundaries import validate_contract_json
 from aog_recovery.validation.confidence import ConfidenceDisposition, assess_confidence
 from aog_recovery.validation.models import ValidationReport
 
@@ -113,7 +113,7 @@ class OperationsAgent:
 
     def assess_payload(self, payload: object) -> OperationsOutcome | ValidationReport:
         """Validate an untrusted request payload; invalid input yields findings, no assessment."""
-        request, report = validate_contract(OperationsRequest, payload)
+        request, report = validate_contract_json(OperationsRequest, payload)
         if request is None:
             return report
         return self.assess(request)

@@ -1,6 +1,7 @@
 from collections.abc import Collection
 
 from pydantic import BaseModel, ValidationError
+from pydantic_core import PydanticSerializationError, to_json
 
 from aog_recovery.contracts.agent import AgentResult
 from aog_recovery.contracts.case import AogCase
@@ -8,10 +9,14 @@ from aog_recovery.validation.models import ValidationFinding, ValidationReport
 
 
 def _validate_model[Contract: BaseModel](
-    model: type[Contract], payload: object
+    model: type[Contract], payload: object, from_json: bool = False
 ) -> tuple[Contract | None, ValidationReport]:
     try:
-        validated = model.model_validate(payload)
+        if from_json:
+            assert isinstance(payload, bytes)
+            validated = model.model_validate_json(payload)
+        else:
+            validated = model.model_validate(payload)
     except ValidationError as error:
         findings = tuple(
             sorted(
@@ -34,6 +39,20 @@ def validate_contract[Contract: BaseModel](
     model: type[Contract], payload: object
 ) -> tuple[Contract | None, ValidationReport]:
     return _validate_model(model, payload)
+
+
+def validate_contract_json[Contract: BaseModel](
+    model: type[Contract], payload: object
+) -> tuple[Contract | None, ValidationReport]:
+    """Validate JSON-compatible input (strings for enums and timestamps), still strictly."""
+    try:
+        raw = to_json(payload)
+    except PydanticSerializationError:
+        finding = ValidationFinding(
+            field_path="$", code="not_json_serializable", message="payload is not JSON serializable"
+        )
+        return None, ValidationReport(is_valid=False, findings=(finding,))
+    return _validate_model(model, raw, from_json=True)
 
 
 def validate_case(payload: object) -> ValidationReport:
