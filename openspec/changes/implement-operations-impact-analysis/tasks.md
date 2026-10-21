@@ -53,3 +53,5 @@
 
 - [x] 10.1 Add the shared `ReadinessEstimate` contract (absolute ETA, basis, optional window, evidence references; window end and lead-time helpers) and `CandidateOption.with_readiness`; test windows, hours, invalid inputs, and Operations use (ARD-DAT-004/005, ARD-GOV-005).
 - [x] 10.2 Replace the draft Operations output format in the agent proposal with the implemented payload and add a test that the documented keys equal the models (ARD-RUB-004, ARD-OSP-002).
+
+- [x] 10.3 Add optional `case.need_by` to the shared case contract, a shared `SourcingMethod` carried on candidates as a pass-through (shown in the rationale), and `request.reserved_capacity` so capacity claimed by other recovery actions is excluded from rerouting and recorded as an assumption; test contract validity, reduction, full reservation, unrelated flights, agent flow, and JSON input (ARD-CTL-018, ARD-DAT-004, ARD-OPS-009, ARD-RES-006).

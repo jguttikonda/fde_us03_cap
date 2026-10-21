@@ -80,6 +80,17 @@ _SOURCE_LABELS: dict[ToolName, str] = {
     ToolName.OPERATIONS_STATUS: "network disruption context",
 }
 _VIABLE = frozenset({Viability.VIABLE, Viability.VIABLE_WITH_RISK})
+
+
+def _reserved_by_flight(request: OperationsRequest) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for reservation in request.reserved_capacity:
+        totals[reservation.flight_number] = (
+            totals.get(reservation.flight_number, 0) + reservation.packages
+        )
+    return totals
+
+
 _CRITICAL_SOURCES = frozenset(
     {ToolName.PACKAGE_LOAD, ToolName.FLEET_AVAILABILITY, ToolName.ALTERNATE_FLIGHTS}
 )
@@ -338,6 +349,7 @@ class _Assessment:
                 request.reroute_policy,
                 request.evaluated_at,
                 max(cutoffs) if cutoffs else None,
+                _reserved_by_flight(request),
             )
 
         evaluations = tuple(
@@ -699,6 +711,12 @@ class _Assessment:
             statements.append(
                 "A single substitute aircraft serves all affected flights; sequencing between "
                 "them is not modeled."
+            )
+        reserved = _reserved_by_flight(self._request)
+        if reserved:
+            held = ", ".join(f"{n} ({count})" for n, count in sorted(reserved.items()))
+            statements.append(
+                f"Capacity already reserved by other recovery actions was excluded: {held}."
             )
         statements.extend(
             f"Readiness ETA for {c.option_id} is an estimate, not confirmed."

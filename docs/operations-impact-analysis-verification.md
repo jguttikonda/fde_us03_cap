@@ -8,7 +8,7 @@ Python 3.14.7, Google ADK 2.12.0, Pydantic 2.14.1, pytest 9.1.1, Ruff 0.17.1, my
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite (foundation + readiness contract + operations) | `uv run pytest` | 284 passed |
+| Full suite (foundation + readiness contract + operations) | `uv run pytest` | 293 passed |
 | Operations coverage | `--cov=aog_recovery.operations` | 99% (8 of 886 statements) |
 | Lint / format | `uv run ruff check .` / `ruff format --check .` | passed / 165 files formatted |
 | Types | `uv run mypy` | no issues in 34 source files |

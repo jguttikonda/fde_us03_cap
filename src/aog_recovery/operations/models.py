@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from aog_recovery.contracts.agent import AgentResult, StructuredError
+from aog_recovery.contracts.agent import AgentResult, AgentRole, StructuredError
 from aog_recovery.contracts.audit import AuditEvent
 from aog_recovery.contracts.base import ContractModel
 from aog_recovery.contracts.case import AogCase
@@ -17,7 +17,7 @@ from aog_recovery.contracts.evidence import (
     Unknown,
 )
 from aog_recovery.contracts.readiness import EtaBasis as EtaBasis
-from aog_recovery.contracts.readiness import ReadinessEstimate
+from aog_recovery.contracts.readiness import ReadinessEstimate, SourcingMethod
 from aog_recovery.validation.confidence import ConfidenceAssessment, ConfidenceDisposition
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -49,6 +49,8 @@ class CandidateOption(ContractModel):
     readiness_eta: datetime | None = None
     eta_basis: EtaBasis | None = None
     eta_evidence_references: tuple[NonEmptyString, ...] = ()
+    # Pass-through from Materials & Logistics (ARD-CTL-018); Operations does not act on it.
+    sourcing_method: SourcingMethod | None = None
 
     @classmethod
     def with_readiness(
@@ -57,6 +59,7 @@ class CandidateOption(ContractModel):
         kind: OptionKind,
         description: str,
         estimate: ReadinessEstimate,
+        sourcing_method: SourcingMethod | None = None,
     ) -> CandidateOption:
         """Build a candidate from the shared estimate Maintenance or M&L supplies."""
         return cls(
@@ -66,6 +69,7 @@ class CandidateOption(ContractModel):
             readiness_eta=estimate.eta,
             eta_basis=estimate.basis,
             eta_evidence_references=estimate.evidence_references,
+            sourcing_method=sourcing_method,
         )
 
     @field_validator("readiness_eta")
@@ -91,6 +95,15 @@ class ReroutePolicy(ContractModel):
     max_partner_cost_per_package_usd: NonNegativeInt | None = None
 
 
+class CapacityReservation(ContractModel):
+    """Package capacity on an alternate flight already claimed by another recovery action."""
+
+    flight_number: Identifier
+    packages: PositiveInt
+    reserved_by: AgentRole
+    reference: NonEmptyString
+
+
 class OperationsRequest(ContractModel):
     schema_version: Literal["1.0"]
     request_id: NonEmptyString
@@ -99,6 +112,7 @@ class OperationsRequest(ContractModel):
     candidates: tuple[CandidateOption, ...] = Field(min_length=1)
     evaluated_at: datetime
     reroute_policy: ReroutePolicy = Field(default_factory=ReroutePolicy)
+    reserved_capacity: tuple[CapacityReservation, ...] = ()
 
     @field_validator("evaluated_at")
     @classmethod

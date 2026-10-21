@@ -21,6 +21,15 @@ class EtaBasis(StrEnum):
     ESTIMATED = "estimated"
 
 
+class SourcingMethod(StrEnum):
+    """Materials & Logistics sourcing methods; carried on a candidate for traceability."""
+
+    INTERNAL_TRANSFER = "internal_transfer"
+    VENDOR_PURCHASE = "vendor_purchase"
+    BORROW = "borrow"
+    EXPEDITE = "expedite"
+
+
 _ETA_SOURCES = frozenset({AgentRole.MAINTENANCE, AgentRole.MATERIALS_LOGISTICS})
 
 

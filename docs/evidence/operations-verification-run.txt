@@ -1,10 +1,11 @@
-Operations verification run - 2026-10-21T15:03:58
+Operations verification run - 2026-10-21T15:12:19
 
 == uv run pytest -q --cov=aog_recovery.operations --cov-report=term-missing ==
-........................................................................ [ 25%]
-........................................................................ [ 50%]
-........................................................................ [ 76%]
-....................................................................     [100%]
+........................................................................ [ 24%]
+........................................................................ [ 49%]
+........................................................................ [ 73%]
+........................................................................ [ 98%]
+.....                                                                    [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\google\genai\types.py:42
   C:\LabFiles\WA3922-CAP\LabFiles\capstone-project\AOG-Cordinator\.venv\Lib\site-packages\google\genai\types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17
@@ -18,18 +19,18 @@ Name                                       Stmts   Miss  Cover   Missing
 ------------------------------------------------------------------------
 src\aog_recovery\operations\__init__.py        0      0   100%
 src\aog_recovery\operations\adk_agent.py      14      0   100%
-src\aog_recovery\operations\agent.py         229      1    99%   615
+src\aog_recovery\operations\agent.py         238      1    99%   627
 src\aog_recovery\operations\demo.py           97      6    94%   66-69, 144, 171
 src\aog_recovery\operations\gateway.py        71      0   100%
-src\aog_recovery\operations\models.py        180      1    99%   114
+src\aog_recovery\operations\models.py        183      1    99%   128
 src\aog_recovery\operations\prompts.py         5      0   100%
 src\aog_recovery\operations\reasoning.py      65      0   100%
-src\aog_recovery\operations\rules.py         247      1    99%   208
+src\aog_recovery\operations\rules.py         254      1    99%   208
 src\aog_recovery\operations\settings.py       38      0   100%
 src\aog_recovery\operations\synthetic.py      58      0   100%
 ------------------------------------------------------------------------
-TOTAL                                       1004      9    99%
-284 passed, 1 warning in 4.31s
+TOTAL                                       1023      9    99%
+293 passed, 1 warning in 3.76s
 
 == uv run ruff check . ==
 All checks passed!

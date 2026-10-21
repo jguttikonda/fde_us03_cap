@@ -313,6 +313,7 @@ def _restriction(
     policy: ReroutePolicy,
     evaluated_at: datetime,
     latest_cutoff: datetime | None,
+    reserved_amount: int,
 ) -> str | None:
     partner = flight_carrier is CarrierType.PARTNER
     max_cost = policy.max_partner_cost_per_package_usd
@@ -325,6 +326,8 @@ def _restriction(
     if booking_deadline is not None and booking_deadline < evaluated_at:
         return "booking deadline has passed"
     if capacity == 0:
+        if reserved_amount > 0:
+            return "capacity fully reserved by another recovery action"
         return "no spare package capacity"
     if latest_cutoff is not None and departure_at > latest_cutoff:
         return "departs after the latest package cut-off"
@@ -337,23 +340,28 @@ def find_replacement_flights(
     policy: ReroutePolicy,
     evaluated_at: datetime,
     latest_cutoff: datetime | None,
+    reserved_capacity: Mapping[str, int] | None = None,
 ) -> tuple[ReplacementFlight, ...]:
     """Own-network and partner flights on the affected routes; bookability is never assumed."""
+    reserved = reserved_capacity or {}
     routes = {(flight.origin, flight.destination) for flight in flights}
     affected = {flight.flight_number for flight in flights}
     found: list[ReplacementFlight] = []
     for alt in data.flights:
         if (alt.origin, alt.destination) not in routes or alt.flight_number in affected:
             continue
+        held = reserved.get(alt.flight_number, 0)
+        capacity = max(0, alt.available_capacity - held)
         restriction = _restriction(
             alt.carrier_type,
             alt.cost_per_package_usd,
-            alt.available_capacity,
+            capacity,
             alt.departure_at,
             alt.booking_deadline,
             policy,
             evaluated_at,
             latest_cutoff,
+            held if alt.available_capacity > 0 else 0,
         )
         found.append(
             ReplacementFlight(
@@ -364,7 +372,7 @@ def find_replacement_flights(
                 destination=alt.destination,
                 departure_at=alt.departure_at,
                 arrival_at=alt.arrival_at,
-                available_capacity=alt.available_capacity,
+                available_capacity=capacity,
                 cost_per_package_usd=alt.cost_per_package_usd,
                 accepted_service_levels=alt.accepted_service_levels,
                 booking_deadline=alt.booking_deadline,
@@ -821,6 +829,8 @@ def _rationale(
         f"{candidate.kind.value}: {delay_minutes} minute schedule delay, "
         f"{threshold.level.value} impact."
     ]
+    if candidate.sourcing_method is not None:
+        parts.append(f"Sourcing: {candidate.sourcing_method.value}.")
     if substitute is not None:
         parts.append(
             f"Substitute {substitute.aircraft.aircraft_id} (capacity "

@@ -232,6 +232,12 @@ This is the implemented payload (`OperationsAssessment`, carried in `AgentResult
 
 ### 8.0 Input from Maintenance and Materials & Logistics
 The Controller (H6) passes each candidate with a shared `ReadinessEstimate` (`contracts/readiness.py`): an absolute timezone-aware `eta`, `basis` (confirmed|estimated), optional `window_start`/`window_end`, and at least one evidence reference. M&L `eta_hours` is anchored with `ReadinessEstimate.from_lead_time_hours(as_of, hours, ...)`; a stated time window uses `ReadinessEstimate.from_window(...)`, which plans on the window end and marks the ETA estimated. For repair options the Maintenance return-to-service ETA is the value passed; the M&L parts-ready ETA is cited as evidence. `CandidateOption.with_readiness(...)` builds the Operations candidate from it.
+
+Three further H6 inputs keep Operations consistent with Materials & Logistics:
+- `candidate.sourcing_method` (internal_transfer|vendor_purchase|borrow|expedite, the shared `SourcingMethod`): optional pass-through from M&L (ARD-CTL-018); Operations shows it in the option rationale and does not act on it.
+- `request.reserved_capacity`: package capacity on alternate flights already claimed by another recovery action (for example an M&L parts shipment on an own-network flight). Operations subtracts it before allocating; a fully reserved flight is listed as not usable with that reason, and the exclusion is recorded as an assumption. The Controller owns the reservation list.
+- `case.need_by` (optional, on the shared `AogCase`): the latest time the aircraft or part is needed, supplied at intake for the sourcing agents; Operations does not use it.
+
 ## 9. Deterministic Responsibilities
 - Validate flight and schedule data
 - Detect route conflicts and aircraft assignment issues

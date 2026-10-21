@@ -240,3 +240,17 @@ The system MUST emit structured, redacted, correlated audit events for operation
 
 - **WHEN** two cases are assessed and one source fails for one case
 - **THEN** the other case's result, evidence, and events are unaffected (ARD-RES-007)
+
+### Requirement: Reserved flight capacity
+
+The system MUST exclude from rerouting any package capacity that the request reports as already reserved on an alternate flight by another recovery action, MUST list a flight whose capacity is fully reserved as not usable with that reason, and MUST record the exclusion as an assumption. Reservations are supplied by the Controller; the agent MUST NOT create, change, or release them.
+
+#### Scenario: Capacity reserved by another action
+
+- **WHEN** an own-network flight has 150 spare packages and 150 are reserved by a Materials & Logistics shipment
+- **THEN** the flight is not usable, packages go to other usable flights or are reported unprotected, and the assumptions name the reserved capacity (ARD-OPS-009, ARD-RES-006)
+
+#### Scenario: Partial reservation
+
+- **WHEN** 100 of 150 spare packages are reserved
+- **THEN** only 50 are offered for rerouting (ARD-OPS-009)
