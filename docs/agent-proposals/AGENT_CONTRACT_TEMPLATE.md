@@ -30,7 +30,7 @@ Every proposal must include the following sections in order:
 ```md
 # [Agent Name] Proposal Draft
 
-This document is a detailed draft for the [Agent Name] and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the [Agent Name] and supplements the root system proposal in ../proposal.md.
 
 ## 1. Purpose
 Describe the specific objective of the agent.
@@ -39,7 +39,7 @@ Describe the specific objective of the agent.
 Explain where the agent sits in the overall workflow and how it contributes to the recovery process.
 
 ## 2A. Handshake with Other Agents
-- Agent type: [top-level agent or sub-agent]
+- Agent type: [top-level agent; note any peer collaboration, e.g. Maintenance <-> Materials & Logistics]
 - Called by: [calling agent(s) and handshake ID(s), or None]
 - Calls: [called agent(s) and handshake ID(s), or None]
 - Payload in and out: [what this agent receives and returns, with handshake ID(s)]
@@ -146,15 +146,17 @@ Return only a structured output with:
 ```
 
 ## 8. Expected Output Standard Format
+Each agent defines its own role-specific output fields, shaped by its responsibilities and by what its peers need from it (for example, Maintenance returns root cause, ETA and airworthiness status; Materials & Logistics returns sourcing, authorization and cost; Operations returns flight, package and load-redistribution impact). Only the small envelope below is common, so the Controller can validate and trace every result.
 ```json
 {
   "agent_name": "[Agent Name]",
   "status": "active|resolved|uncertain",
   "summary": "Short summary",
-  "key_findings": ["Finding 1"],
+  "confidence": 0.0,
+  "assumptions": ["Assumption 1"],
+  "<role_specific_fields>": "Defined by this agent's responsibilities and the needs of its peers",
   "recommendation": {
-    "decision": "repair|delay|escalate|source|reroute|approve",
-    "confidence": 0.0,
+    "decision": "<value from this agent's own decision set>",
     "reasoning": "Why this recommendation is preferred",
     "next_steps": ["Step 1", "Step 2"]
   }
@@ -271,6 +273,7 @@ Add implementation or design notes relevant to the agent.
 - Do not rename the sections.
 - Keep deterministic and non-deterministic responsibilities explicit.
 - Separate LLM reasoning inputs/outputs from tool and API inputs/outputs.
+- Inputs and outputs (sections 8 and 10-12) are role-specific: define them from this agent's responsibilities and from what its peers (including A2A partners) need from it. Do not copy another agent's fields; only the common envelope in section 8 is shared.
 - Include both validation logic and decision logic.
 - Ensure each agent produces a structured decision artifact for the Controller or for human review.
 

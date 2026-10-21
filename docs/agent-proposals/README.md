@@ -1,9 +1,9 @@
 # Agent Proposal Index
 
-This folder contains the specialist agent proposals for the AOG Recovery Coordinator architecture.
+This folder contains the agent proposals for the AOG Recovery Coordinator architecture: four agents in total (Controller Agent (Recovery Coordinator), Maintenance Agent, Materials & Logistics Agent, and Operations Agent).
 
 ## Root Proposal
-- [../propsal.md](../propsal.md) — system-level architecture and controller-led orchestration design
+- [../proposal.md](../proposal.md) — system-level architecture and controller-led orchestration design
 
 ## Shared Contract
 - [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md) — canonical structure used by all agent proposals
@@ -13,11 +13,11 @@ This folder contains the specialist agent proposals for the AOG Recovery Coordin
 
 ## Specialist Agent Proposals
 - [maintenance-agent-proposal.md](maintenance-agent-proposal.md) — technical repairability and maintenance feasibility
-- [inventory-agent-proposal.md](inventory-agent-proposal.md) — sub-agent of Maintenance: material readiness, part availability, and sourcing
+- [materials-logistics-agent-proposal.md](materials-logistics-agent-proposal.md) — peer of Maintenance (A2A): inventory, alternate parts, transfer and vendor sourcing, shipping, and ETA
 - [operations-agent-proposal.md](operations-agent-proposal.md) — route, fleet, and service disruption impact
 
 ## Coordination Model
-The Controller Agent remains the orchestration layer, while each specialist agent owns its own local reasoning, context, memory, tool access, validation, and recommendation output. This separation preserves clarity and makes each agent easier to implement and govern.
+The Maintenance Agent and Materials & Logistics Agent collaborate directly as peers (A2A), with every exchange recorded in the Controller case context. The Controller Agent remains the orchestration layer, while each specialist agent owns its own local reasoning, context, memory, tool access, validation, and recommendation output. This separation preserves clarity and makes each agent easier to implement and govern.
 
 The merged design also incorporates the decision-scoring and confidence model from the parallel Unit B proposal: each domain agent contributes evidence, the Controller Agent ranks viable options using a deterministic rule, and a final recommendation is only accepted when the confidence, assumptions, and risk profile are explicit and reviewable by a human approver.
 

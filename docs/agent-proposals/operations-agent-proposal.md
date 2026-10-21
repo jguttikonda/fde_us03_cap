@@ -1,12 +1,12 @@
 # Operations Agent Proposal Draft
 
-This document is a detailed draft for the Operations Agent and supplements the root system proposal in ../propsal.md.
+This document is a detailed draft for the Operations Agent and supplements the root system proposal in ../proposal.md.
 
 ## 0. Shared Contract Reference
 This draft follows the canonical agent contract defined in [AGENT_CONTRACT_TEMPLATE.md](AGENT_CONTRACT_TEMPLATE.md). All specialist proposals use the same structure and section ordering to preserve consistency across the architecture.
 
 ## 1. Purpose
-The Operations Agent measures how an AOG event disrupts flights and the packages that ride on them, and recommends the least harmful operational path.
+The Operations Agent measures how an AOG event disrupts flights and the package loads they carry (FedEx flights carry package delivery loads), analyzes how that load can be redistributed to other flights or aircraft, and recommends the least harmful operational path. It answers whether another aircraft can be substituted and which flights, customers, and downstream operations each recovery option affects, so the Controller can weigh recovery speed against operational impact, cost, and risk.
 
 ## 2. Role in the System
 This agent focuses on the fleet, network, and package implications of each recovery option. It looks beyond the aircraft itself to understand route disruption, schedule risk, package service commitments, and the cost of delay, rerouting, or substitution.
@@ -28,21 +28,23 @@ Returns to:    Controller (H7)
 - Identify packages affected by disrupted flights
 - Assess exposure of time-critical and priority packages
 - Identify service commitments at risk and summarize the likely customer impact
+- Analyze package load redistribution: which packages can be moved to other flights or a substitute aircraft, given aircraft capacity, sort and cut-off windows, and service levels, and which cannot
 
 ## 4. Non-Deterministic Responsibilities
 - Determine which disruption pattern is most damaging under uncertainty
-- Assess whether a delay, reroute, or aircraft swap is the least-bad option
+- Assess whether a delay or aircraft swap (with package load redistribution) is the least-bad option
 - Balance customer impact against recovery efficiency
 - Prioritize among multiple operational options when the trade-off is ambiguous
 - Interpret dynamic schedule pressure in business terms
 - Decide which disruption matters most when flight delay and package service risk point in different directions
 - Choose between holding packages for a delayed aircraft, moving them to another flight, or swapping the aircraft when the available metrics do not determine a clear choice
 - Weigh a small number of high-priority packages against a larger number of standard packages
+- Decide how to redistribute package load when capacity on alternate flights or aircraft is limited, and which packages to prioritize for protection
 - Judge how much schedule slack the network has when recovery ETAs are uncertain
 - Explain package and customer impacts in plain business language
 
 ## 5. Context Engineering and Memory Management
-The Operations Agent maintains a network-oriented case memory focused on the live disruption, affected flights and packages, fleet constraints, and service-critical context. It keeps only the route, schedule, and package facts needed to assess whether a reroute, swap, delay, or recovery action is feasible without overloading the working context with unrelated planning detail.
+The Operations Agent maintains a network-oriented case memory focused on the live disruption, affected flights and packages, fleet constraints, and service-critical context. It keeps only the route, schedule, and package facts needed to assess whether a swap, delay, load redistribution, or recovery action is feasible without overloading the working context with unrelated planning detail.
 
 - Short-term memory: affected routes and packages, aircraft availability, timing windows, and customer priority context
 - Working memory: active operational options, feasibility checks, and service-impact trade-offs under evaluation
@@ -89,12 +91,12 @@ Use the grounded operational evidence from Prompt A to compare feasible recovery
 
 Inputs you must assess:
 - Affected routes and current fleet capacity
-- Maintenance, inventory, and customer-priority constraints
+- Maintenance, materials and logistics, and customer-priority constraints
 - Affected package manifests, service levels, and sort and cut-off windows
 - Recovery options already under consideration
 
 Decision rules:
-- Compare swap, reroute, delay, and repair paths by impact and feasibility
+- Compare swap, delay, and repair paths by impact, package load, cost, and feasibility
 - Prefer the least-disruptive path that still works under operational constraints
 - Use judgement to weigh flight disruption against package service risk when they point to different recovery options
 - Explicitly state the trade-offs and risk assumptions
@@ -103,11 +105,12 @@ Return only a structured output with:
 1. impacted_routes
 2. affected_package_count
 3. time_critical_package_exposure
-4. service_commitments_at_risk
-5. recovery_options
-6. schedule_risk_minutes
-7. risk_factors
-8. confidence
+4. load_redistribution_plan
+5. service_commitments_at_risk
+6. recovery_options
+7. schedule_risk_minutes
+8. risk_factors
+9. confidence
 ```
 
 ### 7.3 Prompt C — Final Validation and Output Normalization
@@ -148,12 +151,19 @@ Return only a structured output with:
     "affected_package_count": 0,
     "time_critical_package_count": 0,
     "service_commitments_at_risk": ["Commitment 1"],
+    "load_redistribution": {
+      "packages_redistributable": 0,
+      "packages_unprotected": 0,
+      "target_flights_or_aircraft": ["Flight/aircraft 1"],
+      "capacity_constraints": ["Constraint 1"]
+    },
     "summary": "Summary of package and customer impact"
   },
   "recovery_options": [
     {
-      "option": "repair|swap|reroute|delay",
+      "option": "repair_original|repair_alternate|swap|delay",
       "estimated_impact": "Low / Medium / High",
+      "estimated_cost_usd": 0,
       "rationale": "Why this option is plausible"
     }
   ],
@@ -166,7 +176,7 @@ Return only a structured output with:
     "Assumption 2"
   ],
   "recommendation": {
-    "decision": "repair|swap|reroute|delay|escalate",
+    "decision": "repair_original|repair_alternate|swap|delay|escalate",
     "confidence": 0.0,
     "reasoning": "Why this operational path is preferred",
     "next_steps": ["Step 1", "Step 2"]
@@ -180,7 +190,9 @@ Return only a structured output with:
 - Apply standard substitution rules and disruption thresholds
 - Compute basic impact categories and priority logic
 - Maintain structured outputs for route and fleet implications
-
+- Run once per candidate option, using the parts-ready/return-to-service ETA from Maintenance and Materials & Logistics
+- Check package redistribution against aircraft capacity (by tail), package manifests with service level, and sort/cut-off windows; report packages that cannot be protected as unprotected
+- Compute estimated_cost in USD for delay and swap options (mock)
 ## 9A. Operational Validation and Conflict Handling
 The Operations Agent should treat conflicting operational data as a decision-quality issue, not as a minor discrepancy.
 
@@ -197,6 +209,7 @@ Operational validation is performed through a deterministic MCP tool layer befor
 - `detect_route_conflicts`: checks overlapping assignments, cancellations, and disruption patterns against the live schedule
 - `check_fleet_availability`: validates candidate replacement aircraft and current availability windows
 - `apply_disruption_thresholds`: converts schedule and deviation data into standard impact levels
+- `check_load_redistribution`: moves packages to other flights or spare aircraft within capacity and cut-off limits and returns the unprotected remainder
 - `format_impact_payload`: produces the structured operational output used for final comparison and decisioning
 
 ### 8.2 Domain APIs Reached through MCP Tools
@@ -207,6 +220,7 @@ These validation functions are backed by operational data APIs and service feeds
 - Crew Planning API: validates crew availability and station constraints for viable recovery options
 - Customer Service Priority API: supplies service-critical route and impact weighting information
 - Disruption / Network API: identifies active weather, outage, and route disruption conditions affecting the case
+- Package Load API (mock): returns aircraft capacity by tail, package manifests with service level, and sort/cut-off windows
 
 ### 8.3 Tool Interaction Contract (JSON)
 The deterministic tool layer produces structured operational facts that are then interpreted by the LLM for trade-off reasoning.
@@ -270,7 +284,7 @@ Response JSON:
   "impact_level": "critical",
   "threshold_rule_applied": "customer_critical_plus_delay",
   "priority_score": 92,
-  "recommended_action": "reroute_or_swap"
+  "recommended_action": "swap"
 }
 ```
 
@@ -300,7 +314,7 @@ Request JSON:
 {
   "affected_routes": ["MIA-ORD"],
   "impact_level": "critical",
-  "candidate_actions": ["repair", "swap", "reroute"],
+  "candidate_actions": ["repair_original", "repair_alternate", "swap", "delay"],
   "summary": "Aircraft AOG creates 7-hour disruption on high-priority route"
 }
 ```
@@ -311,7 +325,7 @@ Response JSON:
   "structured_impact": {
     "operational_impact_level": "critical",
     "affected_routes": ["MIA-ORD"],
-    "recommended_action": "reroute_or_swap",
+    "recommended_action": "swap",
     "summary": "Aircraft AOG creates 7-hour disruption on high-priority route"
   },
   "format_version": "v1"
@@ -359,7 +373,7 @@ This is the downstream execution handshake: the structured operational recommend
 ### Handshake Chain
 Tool / External System Inputs (10) -> LLM-Facing Inputs (9) -> LLM-Facing Outputs (11) -> Tool / External System Outputs (12)
 
-This sequence preserves a clear trail from raw operational data through reasoning to the concrete schedule, package, or reroute decision.
+This sequence preserves a clear trail from raw operational data through reasoning to the concrete schedule, package, or swap decision.
 
 ## 13. Validation and Output Evaluation
 The Operations Agent should confirm:
@@ -371,8 +385,9 @@ The Operations Agent should confirm:
 ## 14. Questions This Agent Seeks to Answer
 - Which flights or routes are impacted by the outage?
 - Which packages are affected, and how many are time-critical?
+- How can the package load be redistributed to other flights or aircraft, and which packages remain at risk?
 - Is substitution or rerouting feasible?
-- What is the cost of delay, reroute, or alternate recovery?
+- What is the cost of delay, swap, or alternate recovery?
 - Which recovery option minimizes disruption while staying realistic?
 - What is the operational impact on schedule reliability and customer commitments?
 
@@ -395,7 +410,7 @@ All scenario details, times, counts, and outcomes in this section are MOCK DATA 
 
 | Option | Estimated return to service |
 |---|---|
-| Transfer Part | 9 hours (2026-10-19 22:10) |
+| Repair with Alternate Part (transfer, 9 h) | 9 hours (2026-10-19 22:10) |
 | Delay Flight | 27 hours (2026-10-20 16:10) |
 
 **MOCK DATA — FX123 flights and package manifests:**
@@ -419,7 +434,7 @@ For this example, count all manifested packages on each affected flight as affec
 | Option | Flights affected | Affected packages | Priority packages at risk |
 |---|---|---:|---:|
 | Swap Aircraft (FX207) | FX401 | 1,200 | 180 (short delay) |
-| Transfer Part (9 h) | FX401, FX812 | 2,100 | 320 |
+| Repair with Alternate Part (9 h) | FX401, FX812 | 2,100 | 320 |
 | Delay Flight (27 h) | FX401, FX812, FX955 | 2,800 | 380 |
 
 **MOCK DATA — Expected recommendation:** Swap Aircraft (FX207), because it affects the fewest flights and priority packages. This example uses the task's stated expected outcome; if the team changes the ranking rule in the open decisions, update this result to match.
@@ -430,6 +445,11 @@ For this example, count all manifested packages on each affected flight as affec
 **Required Operations judgment:** Compare the uncertain repair window and package cut-off/service risk with the possibility of swapping to FX207. State which facts are confirmed, which assumptions remain, and how the low-confidence ETA affects the recommendation.
 
 **MOCK DATA — Expected judgment:** If FX207's dispatch readiness is confirmed in time to protect the early flight's service commitments, recommend the swap as the lower-risk option and explain why. If readiness cannot be confirmed, flag the recommendation as provisional and present the package impact of waiting for the uncertain repair ETA for human review.
+
+### Scenario 3: Package Load Redistribution
+**MOCK DATA — Inputs:** FX123 is grounded at MEM and the FX401 load is 1,200 packages (180 priority). FX207 (spare, same type) has capacity for 1,000 packages. FX955 has 300 packages of spare capacity, but its package cut-off is 15:00 and cannot take packages arriving after that.
+
+**MOCK DATA — Expected judgment:** Redistribute 1,000 packages to FX207 and 150 packages to FX955 within cut-off. Report 50 packages (10 priority) as unprotected, include them in the package impact and cost of the option, and let the Controller weigh the result.
 
 ## 17. Draft Notes
 This agent turns a technical recovery problem into a business recovery decision. It ensures the final recommendation is not only technically possible but also operationally sensible in real-world conditions.
