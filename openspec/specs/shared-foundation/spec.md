@@ -3,9 +3,7 @@
 ## Purpose
 
 Provides versioned, validated contracts and deterministic shared runtime boundaries so AOG decision-support components exchange traceable evidence and results without hiding degradation or bypassing human authority.
-
 ## Requirements
-
 ### Requirement: Versioned AOG case contract
 
 The system MUST represent each AOG case with a unique case identifier, aircraft identifier, event type, defect summary, location, event timestamp, creation timestamp, and schema version. Invalid or missing required intake fields MUST be reported explicitly and MUST prevent the case from being treated as valid.
@@ -141,3 +139,18 @@ The system MUST load non-secret runtime configuration through typed settings, ke
 
 - **WHEN** timeout or other constrained settings are invalid
 - **THEN** startup or configuration loading fails with an explicit validation error and does not silently select a different adapter or policy (ARD-DAT-009, ARD-NFR-001, ARD-NFR-006)
+
+### Requirement: Operations read-only tool identifiers and allowlist
+
+The shared tool contract MUST identify the operations read tools for flight schedule, fleet availability, package load, and alternate flights, in addition to the existing operations status tool, and MUST allowlist them for the Operations and Controller roles only. Specialist roles outside that allowlist MUST receive a structured role-not-allowlisted failure, and no operations tool identifier MAY imply a write capability.
+
+#### Scenario: Operations role reads an operations tool
+
+- **WHEN** the Operations role requests the flight schedule, fleet availability, package load, alternate flights, or operations status tool with read access
+- **THEN** the local adapter returns the deterministic fixture result for that tool (ARD-SEC-001, ARD-SEC-003, ARD-SYS-007, ARD-SYS-008)
+
+#### Scenario: Other specialist requests an operations tool
+
+- **WHEN** the Maintenance or Materials & Logistics role requests an operations tool
+- **THEN** the adapter returns a structured role-not-allowlisted failure with no data (ARD-SEC-003, ARD-TST-007)
+
