@@ -1,0 +1,287 @@
+{
+  "scenarios": [
+    {
+      "scenario_id": "part_available_local",
+      "description": "P-110 is failed and unavailable; approved replacement P-120 is in stock at MIA.",
+      "input": {
+        "schema_version": "1.0",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; evaluate approved replacement P-120.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "assessment": {
+          "schema_version": "1.0",
+          "availability_status": "available",
+          "part_availability": [
+            {
+              "part_number": "P-110",
+              "role": "failed_part",
+              "required_quantity": 1,
+              "available_quantity": 0,
+              "minimum_stock_threshold": 0,
+              "location": "MIA",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P110-MIA-1042"
+            },
+            {
+              "part_number": "P-120",
+              "role": "preferred_replacement",
+              "required_quantity": 1,
+              "available_quantity": 2,
+              "minimum_stock_threshold": 1,
+              "location": "MIA",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P120-MIA-1042"
+            }
+          ],
+          "part_eligibility": [
+            {
+              "part_number": "P-120",
+              "compatibility": "compatible",
+              "authorization": "authorized",
+              "traceability": "verified",
+              "checked_by_role": "materials_inventory_specialist",
+              "evidence_references": ["ELIG-P120-1042"]
+            }
+          ],
+          "sourcing_options": [
+            {
+              "part_number": "P-120",
+              "source": "MIA station inventory",
+              "source_location": "MIA",
+              "method": "internal_transfer",
+              "shipping_provider": null,
+              "shipping_service": null,
+              "transfer_required": false,
+              "lead_time_hours": 0.5,
+              "eta_at": "2026-10-22T10:30:00Z",
+              "estimated_cost_usd": 0.0,
+              "quote_unavailable_reason": null,
+              "evidence_references": ["QUOTE-P120-LOCAL-1042"],
+              "assumptions": ["Local issue and handling are estimated to take 30 minutes."]
+            }
+          ],
+          "confidence": 0.92,
+          "risk_factors": [],
+          "assumptions": [],
+          "missing_data": []
+        },
+        "evidence_summary": {
+          "status": "success",
+          "confidence": 0.92,
+          "evidence_references": [
+            "INV-P110-MIA-1042",
+            "INV-P120-MIA-1042",
+            "ELIG-P120-1042",
+            "QUOTE-P120-LOCAL-1042"
+          ],
+          "warnings": [],
+          "errors": []
+        }
+      }
+    },
+    {
+      "scenario_id": "part_available_remote",
+      "description": "P-110 is unavailable at MIA; approved replacement P-120 is in DFW and requires transfer.",
+      "input": {
+        "schema_version": "1.0",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; evaluate approved replacement P-120.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "assessment": {
+          "schema_version": "1.0",
+          "availability_status": "available",
+          "part_availability": [
+            {
+              "part_number": "P-110",
+              "role": "failed_part",
+              "required_quantity": 1,
+              "available_quantity": 0,
+              "minimum_stock_threshold": 0,
+              "location": "MIA",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P110-MIA-1042"
+            },
+            {
+              "part_number": "P-120",
+              "role": "preferred_replacement",
+              "required_quantity": 1,
+              "available_quantity": 4,
+              "minimum_stock_threshold": 1,
+              "location": "DFW",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P120-DFW-1042"
+            }
+          ],
+          "part_eligibility": [
+            {
+              "part_number": "P-120",
+              "compatibility": "compatible",
+              "authorization": "authorized",
+              "traceability": "verified",
+              "checked_by_role": "materials_inventory_specialist",
+              "evidence_references": ["ELIG-P120-1042"]
+            }
+          ],
+          "sourcing_options": [
+            {
+              "part_number": "P-120",
+              "source": "DFW station inventory",
+              "source_location": "DFW",
+              "method": "internal_transfer",
+              "shipping_provider": "fedex_network",
+              "shipping_service": "priority_freight",
+              "transfer_required": true,
+              "lead_time_hours": 3.0,
+              "eta_at": "2026-10-22T13:00:00Z",
+              "estimated_cost_usd": 1250.0,
+              "quote_unavailable_reason": null,
+              "evidence_references": ["QUOTE-P120-REMOTE-1042"],
+              "assumptions": ["Mock priority transfer schedule is available."]
+            }
+          ],
+          "confidence": 0.86,
+          "risk_factors": ["Transfer timing may change if the shipment is delayed."],
+          "assumptions": [],
+          "missing_data": []
+        },
+        "evidence_summary": {
+          "status": "success",
+          "confidence": 0.86,
+          "evidence_references": [
+            "INV-P110-MIA-1042",
+            "INV-P120-DFW-1042",
+            "ELIG-P120-1042",
+            "QUOTE-P120-REMOTE-1042"
+          ],
+          "warnings": [],
+          "errors": []
+        }
+      }
+    },
+    {
+      "scenario_id": "part_unavailable",
+      "description": "Current mock inventory finds neither P-110 nor P-120 at MIA or DFW; no sourcing quote is available.",
+      "input": {
+        "schema_version": "1.0",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; replacement stock has not been located.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "assessment": {
+          "schema_version": "1.0",
+          "availability_status": "unavailable",
+          "part_availability": [
+            {
+              "part_number": "P-110",
+              "role": "failed_part",
+              "required_quantity": 1,
+              "available_quantity": 0,
+              "minimum_stock_threshold": 0,
+              "location": "MIA",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P110-MIA-1042"
+            },
+            {
+              "part_number": "P-120",
+              "role": "preferred_replacement",
+              "required_quantity": 1,
+              "available_quantity": 0,
+              "minimum_stock_threshold": 1,
+              "location": "MIA",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P120-MIA-1042"
+            },
+            {
+              "part_number": "P-120",
+              "role": "preferred_replacement",
+              "required_quantity": 1,
+              "available_quantity": 0,
+              "minimum_stock_threshold": 1,
+              "location": "DFW",
+              "source": "mock_inventory",
+              "retrieved_at": "2026-10-22T10:03:00Z",
+              "validity_state": "current",
+              "claim_reference": "INV-P120-DFW-1042"
+            }
+          ],
+          "part_eligibility": [
+            {
+              "part_number": "P-120",
+              "compatibility": "unknown",
+              "authorization": "unknown",
+              "traceability": "unknown",
+              "checked_by_role": null,
+              "evidence_references": []
+            }
+          ],
+          "sourcing_options": [],
+          "confidence": 0.9,
+          "risk_factors": [
+            "No stock was found at the queried MIA and DFW locations.",
+            "No current vendor quote or delivery estimate is available."
+          ],
+          "assumptions": [],
+          "missing_data": ["vendor_search_result", "replacement_part_eta"]
+        },
+        "evidence_summary": {
+          "status": "success",
+          "confidence": 0.9,
+          "evidence_references": [
+            "INV-P110-MIA-1042",
+            "INV-P120-MIA-1042",
+            "INV-P120-DFW-1042"
+          ],
+          "warnings": [],
+          "errors": []
+        }
+      }
+    }
+  ]
+}

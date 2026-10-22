@@ -1,0 +1,154 @@
+{
+  "scenario_id": "part_available_remote",
+  "description": "P-110 failed at MIA. Three recent P-110 failures appear in the history. Preferred replacement P-120 is being transferred from DFW and is estimated ready at 13:00Z.",
+  "input": {
+    "schema_version": "1.0",
+    "case": {
+      "case_id": "AOG-MOCK-1042",
+      "aircraft_id": "N123AB",
+      "event_type": "hydraulic_pump_failure",
+      "defect_summary": "Hydraulic pump P-110 failure; inspect and determine repair path.",
+      "location": "MIA",
+      "event_at": "2026-10-22T10:00:00Z",
+      "created_at": "2026-10-22T10:05:00Z",
+      "need_by": "2026-10-22T18:00:00Z",
+      "schema_version": "1.0",
+      "trace_context": {
+        "trace_id": "trace-aog-mock-1042",
+        "correlation_id": "corr-aog-mock-1042"
+      }
+    },
+    "need_by_time": "2026-10-22T18:00:00Z",
+    "need_by_evidence_reference": "NEED-BY-1042",
+    "parts_ready_at": "2026-10-22T13:00:00Z",
+    "parts_readiness_evidence_reference": "QUOTE-P120-REMOTE-1042",
+    "aircraft_metadata": {
+      "evidence_id": "AIRCRAFT-META-1042",
+      "source": "mock_aircraft_records",
+      "retrieved_at": "2026-10-22T10:02:00Z",
+      "validity_state": "current",
+      "claim_reference": "aircraft-status-N123AB",
+      "content": {
+        "aircraft_id": "N123AB",
+        "aircraft_type": "A320",
+        "station": "MIA",
+        "status": "aog"
+      }
+    },
+    "work_order": {
+      "work_order_id": "WO-MOCK-1042",
+      "aircraft_id": "N123AB",
+      "status": "open",
+      "required_actions": [
+        "Inspect hydraulic pump installation",
+        "Replace failed pump if engineering conditions are met",
+        "Complete required functional checks"
+      ],
+      "estimated_repair_duration_hours": 3.0,
+      "evidence": {
+        "evidence_id": "WORK-ORDER-1042",
+        "source": "mock_maintenance_system",
+        "retrieved_at": "2026-10-22T10:04:00Z",
+        "validity_state": "current",
+        "claim_reference": "work-order-WO-MOCK-1042",
+        "content": {
+          "work_order_id": "WO-MOCK-1042",
+          "status": "open",
+          "estimated_repair_duration_hours": 3.0,
+          "estimated_repair_labor_cost_usd": 1250
+        }
+      }
+    },
+    "maintenance_history": [
+      {
+        "evidence_id": "HIST-P110-001",
+        "source": "mock_maintenance_history",
+        "retrieved_at": "2026-10-22T10:04:00Z",
+        "validity_state": "current",
+        "claim_reference": "prior-P110-repair-001",
+        "content": {
+          "part_number": "P-110",
+          "occurred_at": "2026-10-01T08:00:00Z",
+          "repair_duration_hours": 3.5,
+          "repair_summary": "Pump replaced and functional check completed."
+        }
+      },
+      {
+        "evidence_id": "HIST-P110-002",
+        "source": "mock_maintenance_history",
+        "retrieved_at": "2026-10-22T10:04:00Z",
+        "validity_state": "current",
+        "claim_reference": "prior-P110-repair-002",
+        "content": {
+          "part_number": "P-110",
+          "occurred_at": "2026-10-08T11:30:00Z",
+          "repair_duration_hours": 4.0,
+          "repair_summary": "Similar pump fault; replacement followed by operational checks."
+        }
+      },
+      {
+        "evidence_id": "HIST-P110-003",
+        "source": "mock_maintenance_history",
+        "retrieved_at": "2026-10-22T10:04:00Z",
+        "validity_state": "current",
+        "claim_reference": "prior-P110-repair-003",
+        "content": {
+          "part_number": "P-110",
+          "occurred_at": "2026-10-15T14:15:00Z",
+          "repair_duration_hours": 3.0,
+          "repair_summary": "Pump replacement completed; no follow-up fault recorded."
+        }
+      }
+    ],
+    "engineering_constraints": [
+      {
+        "evidence_id": "ENG-P120-1042",
+        "source": "mock_engineering_notes",
+        "retrieved_at": "2026-10-22T10:03:00Z",
+        "validity_state": "current",
+        "claim_reference": "engineering-preference-P120",
+        "content": {
+          "preferred_replacement_part": "P-120",
+          "condition": "Use only after compatibility and authorization are confirmed by the approved records."
+        }
+      },
+      {
+        "evidence_id": "APPROVAL-P120-1042",
+        "source": "mock_engineering_approvals",
+        "retrieved_at": "2026-10-22T10:03:00Z",
+        "validity_state": "current",
+        "claim_reference": "engineering-approval-P120",
+        "content": {
+          "synthetic_demo_record": true,
+          "status": "approval_recorded",
+          "approver_role": "Licensed Engineering Authority",
+          "recorded_at": "2026-10-22T10:03:00Z",
+          "scope": "P-120 is an approved, compatible and authorized replacement for P-110 on the aircraft named in this case.",
+          "note": "Documented engineering approval only; final operational approval remains with human reviewers."
+        }
+      }
+    ],
+    "safety_conditions": [
+      {
+        "evidence_id": "SAFETY-1042",
+        "source": "mock_safety_records",
+        "retrieved_at": "2026-10-22T10:03:00Z",
+        "validity_state": "current",
+        "claim_reference": "safety-check-required-1042",
+        "content": {
+          "required_before_return": "Complete maintenance inspection and functional checks.",
+          "human_authority_required": true
+        }
+      }
+    ],
+    "part_dependencies": [
+      {
+        "part_number": "P-120",
+        "required_quantity": 1,
+        "required_before_repair": true,
+        "evidence_references": ["ENG-P120-1042", "APPROVAL-P120-1042", "QUOTE-P120-REMOTE-1042"]
+      }
+    ],
+    "missing_data": []
+  }
+}

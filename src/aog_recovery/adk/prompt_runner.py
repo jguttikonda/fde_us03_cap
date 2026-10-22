@@ -36,6 +36,35 @@ class GoogleAdkPromptRunner:
         self.model_name = model_name
         self.timeout_seconds = timeout_seconds
 
+    def build_prompt_agent(
+        self,
+        *,
+        agent_name: str,
+        stage_name: str,
+        instruction: str,
+        output_model: type[BaseModel],
+    ) -> LlmAgent:
+        schema = json.dumps(output_model.model_json_schema(), sort_keys=True, separators=(",", ":"))
+        schema_instruction = (
+            f"{instruction}\n\nReturn only a JSON object matching this schema. "
+            "The schema describes the output; it is not output data. Do not copy schema keywords "
+            "such as additionalProperties, properties, required, type, or $defs into the JSON. "
+            "Do not include markdown fences or additional fields.\n"
+            f"Schema: {schema}"
+        )
+        return LlmAgent(
+            name=f"{agent_name}_{stage_name}",
+            model=self.model_name,
+            instruction=schema_instruction,
+            generate_content_config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            ),
+            timeout=self.timeout_seconds,
+            include_contents="none",
+            disallow_transfer_to_parent=True,
+            disallow_transfer_to_peers=True,
+        )
+
     async def run_prompt(
         self,
         *,
@@ -49,15 +78,11 @@ class GoogleAdkPromptRunner:
         session_service = InMemorySessionService()
         session_id = uuid4().hex
         user_id = agent_name
-        agent = LlmAgent(
-            name=f"{agent_name}_{stage_name}",
-            model=self.model_name,
+        agent = self.build_prompt_agent(
+            agent_name=agent_name,
+            stage_name=stage_name,
             instruction=instruction,
-            output_schema=output_model,
-            timeout=self.timeout_seconds,
-            include_contents="none",
-            disallow_transfer_to_parent=True,
-            disallow_transfer_to_peers=True,
+            output_model=output_model,
         )
         runner = Runner(
             agent=agent,
@@ -92,14 +117,19 @@ class GoogleAdkPromptRunner:
                         validated_output = output_model.model_validate_json(response_text)
                         return validated_output.model_dump(mode="python")
                     except ValidationError as error:
+                        findings = "; ".join(
+                            f"{'.'.join(str(part) for part in issue['loc'])}: {issue['msg']}"
+                            for issue in error.errors(include_input=False)
+                        )
                         raise PromptRunnerError(
                             "ADK response did not match the stage output schema"
+                            + (f" ({findings})" if findings else "")
                         ) from error
         except TimeoutError as error:
             raise PromptRunnerError("ADK prompt stage timed out") from error
         except PromptRunnerError:
             raise
         except Exception as error:
-            raise PromptRunnerError("ADK prompt stage failed") from error
+            raise PromptRunnerError(f"ADK prompt stage failed ({type(error).__name__})") from error
 
         raise PromptRunnerError("ADK prompt stage ended without a final response")

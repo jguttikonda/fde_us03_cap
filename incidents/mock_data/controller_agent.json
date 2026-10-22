@@ -1,0 +1,76 @@
+{
+  "format_status": "illustrative_proposal_example_not_runtime_input",
+  "case_id": "AOG-MOCK-1042",
+  "note": "The repository currently has no Controller runtime input contract or Controller implementation. This sample demonstrates the proposal's decision-package output shape only; scores and values are invented.",
+  "sample_report": {
+    "agent_name": "Controller Agent",
+    "case_status": "active",
+    "summary": "P-110 failed on aircraft N123AB at MIA. P-120 is authorized and traceable at DFW, with an estimated transfer arrival at 13:00Z. Operations identifies flight FX103 and package redistribution as the main service impacts.",
+    "relevant_agents": [
+      "Maintenance Agent",
+      "Materials & Logistics Agent",
+      "Operations Agent"
+    ],
+    "key_findings": [
+      "Maintenance history contains three recent P-110 failures; the current work order estimates three hours of repair after the part is ready.",
+      "P-120 is not in MIA stock but is available at DFW and has current mock authorization and traceability evidence.",
+      "FX103 carries 1,200 packages, including 700 priority packages; alternate capacity is limited."
+    ],
+    "ranked_options": [
+      {
+        "rank": 1,
+        "option": "repair_alternate",
+        "sourcing_method": "internal_transfer",
+        "return_to_service_hours": 6.0,
+        "affected_flights": ["FX103"],
+        "affected_packages": {
+          "total": 1200,
+          "priority": 700,
+          "unprotected": 40
+        },
+        "estimated_cost_usd": 1250,
+        "score": 78.0,
+        "risk_metrics": [
+          "Transfer may be delayed.",
+          "Some packages may miss the planned service window."
+        ],
+        "trade_off": "Uses an authorized replacement part and avoids a full aircraft swap, but depends on the DFW transfer arriving on time."
+      },
+      {
+        "rank": 2,
+        "option": "swap",
+        "sourcing_method": "none",
+        "return_to_service_hours": 5.0,
+        "affected_flights": ["FX103"],
+        "affected_packages": {
+          "total": 1200,
+          "priority": 700,
+          "unprotected": 300
+        },
+        "estimated_cost_usd": 14000,
+        "score": 65.0,
+        "risk_metrics": [
+          "Substitute aircraft has less package capacity than the affected load.",
+          "Another flight may be disrupted by moving the aircraft."
+        ],
+        "trade_off": "May restore flight service without waiting for the part, but costs more and leaves more packages without a confirmed route."
+      }
+    ],
+    "excluded_options": [],
+    "recommended_recovery_path": {
+      "option": "repair_alternate",
+      "confidence": 0.68,
+      "rationale": "The replacement part has current mock authorization and traceability evidence, and repair is estimated to complete within the case need-by time. The transfer and package impacts remain uncertain.",
+      "assumptions": [
+        "The DFW transfer estimate remains valid.",
+        "Current schedule and package-load data are accurate."
+      ],
+      "risks": [
+        "Transfer delay could push repair completion later.",
+        "The score is illustrative and has not been produced by a runtime Controller."
+      ]
+    },
+    "human_approval_required": true,
+    "next_action": "Maintenance/airworthiness authority reviews the repair and part evidence; Operations lead reviews the flight and package impacts. No operational action is taken until humans approve."
+  }
+}

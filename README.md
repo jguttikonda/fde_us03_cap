@@ -124,6 +124,38 @@ VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace
 interpreter at `.venv\Scripts\python.exe` or reload the window.
 
+### Local ADK Web AOG chat demo
+
+The Controller chat uses the synthetic inputs in `incidents/mock_data/` and
+does not connect to live airline systems. From the repository root in
+PowerShell, configure `GOOGLE_API_KEY` in your local, ignored `.env` file, then
+start ADK Web:
+
+```powershell
+uv sync --all-groups --locked
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Add your key to GOOGLE_API_KEY in .env using your editor.
+uv run --env-file .env adk web adk_agents
+```
+
+Open the local URL printed by ADK Web and choose `aog_controller`. Example prompt:
+
+```text
+Assess synthetic case AOG-MOCK-1042. Aircraft N123AB is at MIA with hydraulic
+pump P-110 failed. Affected flight: FX103. Need-by time: 2026-10-22 18:00 UTC.
+Use the part_available_remote scenario (P-120 is in DFW). Return the options,
+scores, evidence gaps, and required human approvals. Do not execute any action.
+```
+
+For local or no-stock behavior, replace the scenario with `part_available_local`
+or `part_unavailable`. The assistant asks for missing intake fields instead of
+assuming them. If Google API credentials are unavailable, the ADK Web page can
+open, but model-backed replies will fail until `GOOGLE_API_KEY` is configured.
+All results use synthetic data and are advisory; no operation is performed.
+This is a local development demo, not a production UI. See
+[docs/controller-chat-demo.md](docs/controller-chat-demo.md) for additional
+scenario prompts and expected outcomes.
+
 ## Project Status
 This repository is currently in the proposal and architecture design phase for an enterprise AOG decision-support system.
 

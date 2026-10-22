@@ -4,8 +4,6 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
-from pydantic import ValidationError
-
 from aog_recovery.config import AogSettings
 from aog_recovery.contracts.evidence import Evidence, EvidenceValidity
 from aog_recovery.maintenance.models import (
@@ -13,6 +11,7 @@ from aog_recovery.maintenance.models import (
     RecurringFailureAnalysis,
     RecurringFailureSummary,
 )
+from aog_recovery.validation.boundaries import validate_contract_json
 from aog_recovery.validation.models import ValidationFinding
 
 
@@ -32,25 +31,22 @@ def analyze_recurring_failures(
         content = record.content
         if "part_number" not in content and "occurred_at" not in content:
             continue
-        try:
-            occurrence = MaintenanceFailureOccurrence.model_validate(
-                {
-                    "part_number": content.get("part_number"),
-                    "occurred_at": content.get("occurred_at"),
-                    "evidence_reference": record.evidence_id,
-                }
-            )
-        except ValidationError as error:
+        occurrence, report = validate_contract_json(
+            MaintenanceFailureOccurrence,
+            {
+                "part_number": content.get("part_number"),
+                "occurred_at": content.get("occurred_at"),
+                "evidence_reference": record.evidence_id,
+            },
+        )
+        if occurrence is None:
             findings.extend(
                 ValidationFinding(
-                    field_path=(
-                        f"maintenance_history[{record.evidence_id}]."
-                        f"{'.'.join(str(part) for part in issue['loc'])}"
-                    ),
-                    code=issue["type"],
-                    message=issue["msg"],
+                    field_path=(f"maintenance_history[{record.evidence_id}].{finding.field_path}"),
+                    code=finding.code,
+                    message=finding.message,
                 )
-                for issue in error.errors(include_input=False)
+                for finding in report.findings
             )
             continue
 

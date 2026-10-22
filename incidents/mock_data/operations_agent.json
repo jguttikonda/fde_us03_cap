@@ -1,0 +1,367 @@
+{
+  "source_data": {
+    "flight_schedule": {
+      "flights": [
+        {
+          "flight_number": "FX103",
+          "route": "MIA-ORD",
+          "origin": "MIA",
+          "destination": "ORD",
+          "required_aircraft_type": "A320",
+          "scheduled_departure": "2026-10-22T14:00:00Z",
+          "scheduled_arrival": "2026-10-22T17:00:00Z",
+          "assigned_aircraft_id": "N123AB",
+          "service_critical": true,
+          "crew_coverage": "available",
+          "crew_available_from": null
+        },
+        {
+          "flight_number": "FX777",
+          "route": "MIA-ATL",
+          "origin": "MIA",
+          "destination": "ATL",
+          "required_aircraft_type": "A320",
+          "scheduled_departure": "2026-10-22T12:00:00Z",
+          "scheduled_arrival": "2026-10-22T14:00:00Z",
+          "assigned_aircraft_id": "N456CD",
+          "service_critical": true,
+          "crew_coverage": "available",
+          "crew_available_from": null
+        },
+        {
+          "flight_number": "FX909",
+          "route": "MIA-JFK",
+          "origin": "MIA",
+          "destination": "JFK",
+          "required_aircraft_type": "A320",
+          "scheduled_departure": "2026-10-22T13:00:00Z",
+          "scheduled_arrival": "2026-10-22T16:00:00Z",
+          "assigned_aircraft_id": "N777XY",
+          "service_critical": true,
+          "crew_coverage": "available",
+          "crew_available_from": null
+        }
+      ]
+    },
+    "fleet_availability": {
+      "aircraft": [
+        {
+          "aircraft_id": "N980FX",
+          "aircraft_type": "A320",
+          "station": "MIA",
+          "status": "serviceable",
+          "available_from": "2026-10-22T10:30:00Z",
+          "positioning_minutes": 0,
+          "package_capacity": 900
+        },
+        {
+          "aircraft_id": "N981FX",
+          "aircraft_type": "A320",
+          "station": "FLL",
+          "status": "serviceable",
+          "available_from": "2026-10-22T10:30:00Z",
+          "positioning_minutes": 60,
+          "package_capacity": 700
+        },
+        {
+          "aircraft_id": "N205AB",
+          "aircraft_type": "A320",
+          "station": "MIA",
+          "status": "in_maintenance",
+          "available_from": "2026-10-22T10:30:00Z",
+          "positioning_minutes": 0,
+          "package_capacity": 900
+        }
+      ]
+    },
+    "package_load": {
+      "groups": [
+        {
+          "group_id": "FX103-PRIORITY",
+          "flight_number": "FX103",
+          "service_level": "priority",
+          "time_critical": true,
+          "count": 700,
+          "cutoff_at": "2026-10-22T17:30:00Z"
+        },
+        {
+          "group_id": "FX103-STANDARD",
+          "flight_number": "FX103",
+          "service_level": "standard",
+          "time_critical": false,
+          "count": 500,
+          "cutoff_at": "2026-10-22T17:30:00Z"
+        },
+        {
+          "group_id": "FX777-PRIORITY",
+          "flight_number": "FX777",
+          "service_level": "priority",
+          "time_critical": true,
+          "count": 80,
+          "cutoff_at": "2026-10-22T16:30:00Z"
+        },
+        {
+          "group_id": "FX777-STANDARD",
+          "flight_number": "FX777",
+          "service_level": "standard",
+          "time_critical": false,
+          "count": 220,
+          "cutoff_at": "2026-10-22T16:30:00Z"
+        },
+        {
+          "group_id": "FX909-PRIORITY",
+          "flight_number": "FX909",
+          "service_level": "priority",
+          "time_critical": true,
+          "count": 250,
+          "cutoff_at": "2026-10-22T15:30:00Z"
+        },
+        {
+          "group_id": "FX909-STANDARD",
+          "flight_number": "FX909",
+          "service_level": "standard",
+          "time_critical": false,
+          "count": 350,
+          "cutoff_at": "2026-10-22T15:30:00Z"
+        }
+      ]
+    },
+    "alternate_flights": {
+      "flights": [
+        {
+          "flight_number": "FX505",
+          "carrier_type": "own",
+          "carrier_name": "Mock Company Network",
+          "origin": "MIA",
+          "destination": "ORD",
+          "departure_at": "2026-10-22T16:00:00Z",
+          "arrival_at": "2026-10-22T19:00:00Z",
+          "available_capacity": 150,
+          "cost_per_package_usd": 5,
+          "accepted_service_levels": ["priority", "standard"],
+          "booking_deadline": "2026-10-22T15:00:00Z"
+        },
+        {
+          "flight_number": "PX150",
+          "carrier_type": "partner",
+          "carrier_name": "Mock Partner Network",
+          "origin": "MIA",
+          "destination": "ORD",
+          "departure_at": "2026-10-22T15:30:00Z",
+          "arrival_at": "2026-10-22T18:30:00Z",
+          "available_capacity": 100,
+          "cost_per_package_usd": 18,
+          "accepted_service_levels": ["standard"],
+          "booking_deadline": "2026-10-22T15:00:00Z"
+        },
+        {
+          "flight_number": "PX220",
+          "carrier_type": "partner",
+          "carrier_name": "Mock Partner Network",
+          "origin": "MIA",
+          "destination": "ORD",
+          "departure_at": "2026-10-22T17:00:00Z",
+          "arrival_at": "2026-10-22T20:00:00Z",
+          "available_capacity": 400,
+          "cost_per_package_usd": 20,
+          "accepted_service_levels": ["priority", "standard"],
+          "booking_deadline": "2026-10-22T16:00:00Z"
+        },
+        {
+          "flight_number": "FX506",
+          "carrier_type": "own",
+          "carrier_name": "Mock Company Network",
+          "origin": "MIA",
+          "destination": "ATL",
+          "departure_at": "2026-10-22T16:30:00Z",
+          "arrival_at": "2026-10-22T18:30:00Z",
+          "available_capacity": 120,
+          "cost_per_package_usd": 6,
+          "accepted_service_levels": ["priority", "standard"],
+          "booking_deadline": "2026-10-22T15:30:00Z"
+        },
+        {
+          "flight_number": "PX310",
+          "carrier_type": "partner",
+          "carrier_name": "Mock Partner Network",
+          "origin": "MIA",
+          "destination": "ATL",
+          "departure_at": "2026-10-22T17:00:00Z",
+          "arrival_at": "2026-10-22T19:00:00Z",
+          "available_capacity": 200,
+          "cost_per_package_usd": 15,
+          "accepted_service_levels": ["standard"],
+          "booking_deadline": "2026-10-22T16:00:00Z"
+        },
+        {
+          "flight_number": "FX606",
+          "carrier_type": "own",
+          "carrier_name": "Mock Company Network",
+          "origin": "MIA",
+          "destination": "JFK",
+          "departure_at": "2026-10-22T15:00:00Z",
+          "arrival_at": "2026-10-22T18:00:00Z",
+          "available_capacity": 100,
+          "cost_per_package_usd": 7,
+          "accepted_service_levels": ["priority", "standard"],
+          "booking_deadline": "2026-10-22T14:00:00Z"
+        },
+        {
+          "flight_number": "PX410",
+          "carrier_type": "partner",
+          "carrier_name": "Mock Partner Network",
+          "origin": "MIA",
+          "destination": "JFK",
+          "departure_at": "2026-10-22T16:00:00Z",
+          "arrival_at": "2026-10-22T19:00:00Z",
+          "available_capacity": 300,
+          "cost_per_package_usd": 19,
+          "accepted_service_levels": ["priority", "standard"],
+          "booking_deadline": "2026-10-22T15:00:00Z"
+        }
+      ]
+    },
+    "operations_status": {
+      "disruptions": [
+        {
+          "disruption_id": "WX-ORD-1042",
+          "kind": "weather",
+          "station": "ORD",
+          "severity": "medium",
+          "description": "Synthetic weather delay risk near destination."
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "part_available_local",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "REQ-OPS-LOCAL-1042",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; P-120 is available at MIA.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "affected_flight_numbers": ["FX103"],
+        "candidates": [
+          {
+            "option_id": "OPT-REPAIR-P120-LOCAL",
+            "kind": "repair_alternate",
+            "description": "Repair using approved P-120 from MIA stock.",
+            "readiness_eta": "2026-10-22T13:30:00Z",
+            "eta_basis": "estimated",
+            "eta_evidence_references": ["QUOTE-P120-LOCAL-1042", "MNT-ETA-1042"],
+            "sourcing_method": "internal_transfer"
+          },
+          {
+            "option_id": "OPT-SWAP-LOCAL",
+            "kind": "swap",
+            "description": "Assess a serviceable substitute aircraft for FX103."
+          }
+        ],
+        "evaluated_at": "2026-10-22T10:10:00Z",
+        "reroute_policy": {
+          "allow_partner_flights": true,
+          "prefer_own_network": true,
+          "max_partner_cost_per_package_usd": 20
+        },
+        "reserved_capacity": []
+      }
+    },
+    {
+      "scenario_id": "part_available_remote",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "REQ-OPS-REMOTE-1042",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; P-120 requires transfer from DFW.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "affected_flight_numbers": ["FX103"],
+        "candidates": [
+          {
+            "option_id": "OPT-REPAIR-P120-REMOTE",
+            "kind": "repair_alternate",
+            "description": "Repair using approved P-120 transferred from DFW.",
+            "readiness_eta": "2026-10-22T16:00:00Z",
+            "eta_basis": "estimated",
+            "eta_evidence_references": ["QUOTE-P120-REMOTE-1042", "MNT-ETA-1042"],
+            "sourcing_method": "internal_transfer"
+          },
+          {
+            "option_id": "OPT-SWAP-REMOTE",
+            "kind": "swap",
+            "description": "Assess a serviceable substitute aircraft for FX103."
+          }
+        ],
+        "evaluated_at": "2026-10-22T10:10:00Z",
+        "reroute_policy": {
+          "allow_partner_flights": true,
+          "prefer_own_network": true,
+          "max_partner_cost_per_package_usd": 20
+        },
+        "reserved_capacity": []
+      }
+    },
+    {
+      "scenario_id": "part_unavailable",
+      "request": {
+        "schema_version": "1.0",
+        "request_id": "REQ-OPS-NO-STOCK-1042",
+        "case": {
+          "case_id": "AOG-MOCK-1042",
+          "aircraft_id": "N123AB",
+          "event_type": "hydraulic_pump_failure",
+          "defect_summary": "Hydraulic pump P-110 failure; no replacement stock confirmed at MIA or DFW.",
+          "location": "MIA",
+          "event_at": "2026-10-22T10:00:00Z",
+          "created_at": "2026-10-22T10:05:00Z",
+          "need_by": "2026-10-22T18:00:00Z",
+          "schema_version": "1.0",
+          "trace_context": {
+            "trace_id": "trace-aog-mock-1042",
+            "correlation_id": "corr-aog-mock-1042"
+          }
+        },
+        "affected_flight_numbers": ["FX103"],
+        "candidates": [
+          {
+            "option_id": "OPT-SWAP-NO-STOCK",
+            "kind": "swap",
+            "description": "Assess a serviceable substitute aircraft while part sourcing is unresolved."
+          }
+        ],
+        "evaluated_at": "2026-10-22T10:10:00Z",
+        "reroute_policy": {
+          "allow_partner_flights": true,
+          "prefer_own_network": true,
+          "max_partner_cost_per_package_usd": 20
+        },
+        "reserved_capacity": []
+      }
+    }
+  ]
+}

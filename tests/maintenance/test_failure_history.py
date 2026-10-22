@@ -52,6 +52,34 @@ def test_three_failures_within_configured_window_are_counted_with_sources() -> N
     )
 
 
+def test_json_timestamp_strings_in_evidence_content_are_counted() -> None:
+    records = tuple(
+        Evidence(
+            evidence_id=f"json-failure-{index}",
+            source="synthetic-maintenance-history-json",
+            retrieved_at=AS_OF,
+            validity_state=EvidenceValidity.CURRENT,
+            claim_reference=f"json-failure-claim-{index}",
+            content={
+                "part_number": "P-110",
+                "occurred_at": (AS_OF - timedelta(days=index)).isoformat(),
+            },
+        )
+        for index in (1, 2, 3)
+    )
+
+    result = analyze_recurring_failures(records, AS_OF, AogSettings(_env_file=None))
+
+    assert len(result.summaries) == 1
+    assert result.summaries[0].occurrences == 3
+    assert result.summaries[0].evidence_references == (
+        "json-failure-1",
+        "json-failure-2",
+        "json-failure-3",
+    )
+    assert result.findings == ()
+
+
 def test_threshold_and_window_boundaries_are_deterministic() -> None:
     records = (
         failure_record("failure-in-window", occurred_at=AS_OF - timedelta(days=90)),

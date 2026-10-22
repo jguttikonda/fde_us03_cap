@@ -65,7 +65,12 @@ PROMPT_B_REASONING = (
 PROMPT_C_VALIDATION = (
     "Validate the Maintenance payload against evidence and domain limits. Preserve "
     "missing data, warnings, assumptions, and uncertainty. Never claim airworthiness "
-    "certification or human approval. Return only the requested versioned schema."
+    "certification or claim that this agent approved work. You may report a recorded "
+    "engineering/airworthiness approval only when the supplied evidence includes its "
+    "approver role, source reference, and timestamp. A feasible repair disposition requires "
+    "that recorded approval evidence; otherwise use uncertain and do not recommend repair. "
+    "This documented approval is not the final operational approval, which remains required "
+    "from the human reviewers. Return only the requested versioned schema."
 )
 
 _PROMPT_CONFIG: dict[MaintenancePromptStage, tuple[str, type[ContractModel]]] = {
@@ -197,10 +202,21 @@ class MaintenanceAgent:
                 MaintenanceAssessmentPayload,
             )
         except Exception as error:
-            findings = _schema_findings(error) if isinstance(error, ValidationError) else ()
+            root_error = error.__cause__ or error
+            findings = (
+                _schema_findings(root_error) if isinstance(root_error, ValidationError) else ()
+            )
+            if not findings:
+                findings = (
+                    ValidationFinding(
+                        field_path=f"prompt_stage.{stage.value}",
+                        code="prompt_stage_failed",
+                        message=f"Underlying error type: {type(root_error).__name__}",
+                    ),
+                )
             return _failure_result(
                 "maintenance_prompt_failed",
-                f"Maintenance {stage.value} stage failed validation or execution",
+                f"Maintenance {stage.value} stage failed ({type(root_error).__name__})",
                 input_report,
                 findings,
                 type(error).__name__,
