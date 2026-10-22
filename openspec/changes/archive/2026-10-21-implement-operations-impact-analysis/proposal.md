@@ -1,74 +1,82 @@
+# Proposal
+
 ## Why
 
-The shared foundation is archived, but no specialist agent exists yet. The Controller cannot weigh recovery speed against flight, customer, and package impact until the Operations Agent can assess each candidate recovery option and explain which flights, packages, and commitments it puts at risk. Operations depends only on the shared contracts, so it can be built now, in parallel with Maintenance and Materials & Logistics.
+An AOG recovery option can preserve aircraft availability yet still disrupt flights, crews, customers, and package commitments. The Operations Agent needs a typed, evidence-grounded way to evaluate those impacts—including whether package loads can be protected within tail-specific capacity and cut-off windows—so the Controller and human reviewers can compare recovery options without relying on unsupported assumptions.
 
 ## What Changes
 
-- Add an Operations Agent that evaluates each Controller-supplied candidate (repair with original part, repair with preferred or alternate part, aircraft swap, delay) for route, schedule, fleet, crew, customer, and package-load impact.
-- Add deterministic operations rules: flight and schedule validation, route and assignment conflict detection, substitute-aircraft availability, configurable disruption thresholds mapped to low/medium/high/critical, package load redistribution (aircraft capacity by tail, service level, sort and cut-off windows, unprotected remainder), and mock operational cost in USD.
-- Add typed, read-only, allowlisted operations tool gateways (flight schedule, fleet availability, package load, alternate flights, network disruption) over the existing adapter contract, with deterministic synthetic mock data, bounded idempotent retry, and structured timeout/unavailable/malformed handling. Tool names and JSON contracts follow the proposal's `validate_flight_schedule`, `detect_route_conflicts`, `check_fleet_availability`, `apply_disruption_thresholds`, `check_load_redistribution`, and `format_impact_payload`, plus `find_replacement_flights`; they stay in-process because no process boundary is crossed (MCP exposure is deferred, ARD-TEC-006).
-- Add flight sourcing for package rerouting: search own-network and partner flights on each affected route (mock Flight Capacity API), apply a human-set reroute policy carried in the request (partner flights allowed or not, own network first, partner cost cap), honor booking deadlines, accepted service levels, sort cut-offs, and spare capacity, price the rerouting in USD, and return the flights found with whether each is usable and why not, plus a per-option reroute plan (which packages go on which own or partner flight). The agent proposes only; it never books a flight or moves a package.
-- Add a bounded reasoning boundary (Prompt A grounding, Prompt B trade-off, Prompt C validation) behind a typed reasoner protocol, a Google ADK `LlmAgent` definition carrying those prompts, and a deterministic offline reasoner used for tests and demonstration. A guardrail rejects reasoning that changes computed values, claims airworthiness, or implies approval.
-- Return the shared `AgentResult` envelope with an Operations role payload (ARD-OPS-005): affected routes, per-candidate recovery options with impact and cost, package impact, risk factors, assumptions, missing data, recommendation, confidence, reasoning, next steps, and conflicts. Surface a time-estimate conflict between the Maintenance/M&L ETA and operational feasibility as a conflict, a provisional or escalated result, and a human-adjudication requirement.
-- Extend the shared tool identifiers and role allowlist additively with the operations read tools.
-- Keep the agent advisory: it never ranks options, approves anything, reschedules flights, or moves packages.
-- Not changed: Maintenance, Materials & Logistics, Controller orchestration, compliance gate, weighted ranking, decision-report rendering, live integrations, MCP server exposure, and the human approval workflow.
+- Add a cohesive Operations impact-analysis capability covering affected flights, routes, schedules, fleet assignments, substitute aircraft, crew constraints, customer impact, active disruptions, and package load redistribution.
+- Define deterministic schedule and assignment conflict checks, feasibility checks, impact classification, capacity/cut-off calculations, and per-option delay/swap cost estimates behind typed, read-only adapters.
+- Return a structured, versioned Operations result with evidence provenance, assumptions, missing or stale data, risks, unprotected packages, option-level impacts, recommendation rationale, confidence, and next steps.
+- Make timeouts and unavailable or conflicting evidence visible as structured degraded or provisional results; do not silently substitute successful-looking values.
+- Add deterministic mock adapters and unit/contract test scenarios for normal, partial, conflict, timeout, degradation, security-boundary, and human-approval behavior.
+- Keep cross-agent orchestration, Controller aggregation and weighted ranking, final report generation, and all operational execution out of scope.
+- No ARD deviation is requested.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `operations-impact-analysis`: Per-candidate operational impact assessment, deterministic operations rules and package load redistribution, read-only operations tool gateways, bounded reasoning with guardrails, degraded/conflict handling, and the structured Operations result for Controller aggregation.
+- `operations-impact-analysis`: Produce evidence-grounded flight, fleet, customer, crew, schedule, cost, and package-load impact assessments for Controller-supplied recovery options.
 
 ### Modified Capabilities
 
-- `shared-foundation`: Additive requirement for operations read-only tool identifiers (flight schedule, fleet availability, package load, alternate flights) and their role allowlist; existing requirements are unchanged.
+- None. The repository has no existing capability specifications.
 
 ## Impact
 
-- Adds `src/aog_recovery/operations/` (models, settings, rules, gateway, reasoning, prompts, agent, ADK definition, synthetic data), `tests/operations/`, a runnable synthetic demonstration, and a verification evidence document.
-- Additive edits to `src/aog_recovery/contracts/tool.py` and `src/aog_recovery/adapters/local.py` (tool names and allowlist) and `.env.example` (operations policy variables).
-- No new runtime dependencies: Python, Google ADK, Pydantic, `pydantic-settings`, pytest, Ruff, and mypy are already declared. No live system, database, broker, or write operation is introduced; the model boundary stays behind ADK and is not called in tests.
+- **Code and contracts:** New Operations domain models, deterministic impact and redistribution logic, an ADK-based specialist boundary, and typed tool adapters for flight operations, fleet assignment, crew/station planning, customer priority, disruption, and package-load data. Use deterministic local/mock integrations; use the supported MCP SDK only for adapters crossing an MCP process/service boundary.
+- **Behavior and interfaces:** The Operations result is a domain assessment for later Controller aggregation, not a final system ranking or an approval. Option comparison remains bounded to Operations impact; the Controller retains system-wide ranking and final-report ownership. All integrations are read-only and cannot execute swaps, dispatch, bookings, or package transfers.
+- **Verification:** Pytest contract and behavior tests use fixed fixtures and mock adapters, covering capacity by tail, package service levels and cut-offs, unprotected remainder, conflicts, missing/stale data, timeouts, and policy boundaries.
 
 ## ARD Traceability
 
 ### Addressed
 
-- **ARD-OPS-001..009** — inputs, deterministic validation, impact classification, per-candidate alternatives, output contents, provisional handling of time-sensitive data, material customer trade-off display, route-conflict explanation, and package load redistribution.
-- **ARD-PRN-001..008, ARD-SYS-003, ARD-SYS-007..009** — advisory-only boundary, deterministic guardrails with bounded reasoning, evidence before conclusion, no silent degradation, typed boundaries, domain isolation, and adapter abstraction with deterministic local data.
-- **ARD-DAT-001..012, ARD-CTL-006, ARD-CTL-018, ARD-CTL-019** — versioned Pydantic request/result/evidence/tool contracts, shared result envelope, per-candidate evaluation using the supplied ETA, and the operations cost component of the single estimated cost.
-- **ARD-GOV-001..005, ARD-GOV-008** — confidence thresholds, conflict deferral, missing-data lists instead of assumptions, and no bypass of human approval.
-- **ARD-RES-002, ARD-RES-003, ARD-RES-004, ARD-RES-005, ARD-RES-006, ARD-RES-007** — timeout and failure handling with named missing analysis, structured failures, partial results stating supported conclusions, bounded idempotent retry, visible fallback, and case isolation.
-- **ARD-SEC-001..005, ARD-SEC-006..009** — least-privilege allowlisted read-only tools, untrusted tool data validated and excluded from reasoning, prompt-injection resistance, redaction, no airworthiness claim, append-oriented audit.
-- **ARD-OBS-001..004, ARD-NFR-001..003, ARD-NFR-006..007** — structured correlated events, concise rationale, configurable bounded timeouts/retries, determinism, externalized thresholds and rates.
-- **ARD-TEC-001..005, ARD-TEC-008..009** — Python, ADK, Pydantic, typed settings, ADK-governed model boundary, pytest, Ruff and mypy.
-- **ARD-TST-001..003, ARD-TST-005, ARD-TST-007, ARD-TST-009, ARD-RUB-001..004** — requirement-mapped contract, agent, human-gate, security, and deterministic tests.
+| ARD requirements | Rationale |
+|---|---|
+| ARD-OPS-001..009 | Defines the required operational inputs, deterministic validation and impact classification, repair/swap/delay option analysis, structured result, time-sensitive-data treatment, material customer trade-offs, conflict explanations, and package redistribution within tail capacity/service/cut-off constraints with unprotected packages included in impact and cost. |
+| ARD-PRN-001..008 | Keeps recommendations advisory and human-owned; assigns calculations and checks to deterministic logic; bounds model reasoning; preserves evidence, assumptions, uncertainty, typed boundaries, and case-correlatable outputs. |
+| ARD-SYS-001, 003, 007..009 | Implements the Operations specialist without adding an agent, enforces domain ownership, uses typed adapters, and supports deterministic local/mock integrations compatible with future adapters. |
+| ARD-TEC-001..009 | Plans implementation in the required Python/Google ADK/Pydantic stack, with typed settings, governed model access, bounded asynchronous tool calls, pytest, and configured code-quality checks. MCP SDK use is conditional on an actual MCP process/service boundary. |
+| ARD-GOV-001..008 | Preserves confidence thresholds, missing-data visibility, conflict deferral, and the human approval boundary; the Operations result never approves an option or authorizes action. |
+| ARD-RES-002..007 | Defines visible Operations timeouts and structured agent failures, partial-result semantics, bounded/idempotent retry behavior, no silent fallback, and case isolation. Cached inventory behavior under ARD-RES-001 belongs to Materials & Logistics and is not introduced here. |
+| ARD-SEC-001..008 | Limits adapters to least-privilege, allowlisted, read-only access; validates untrusted inputs; resists prompt injection; protects secrets and logs; and prohibits unsupported airworthiness or regulatory claims. |
+| ARD-OBS-001..005 | Emits traceable structured validation, tool, completion, conflict, fallback, and escalation events with case/correlation and schema metadata, without requiring private chain-of-thought. |
+| ARD-NFR-001..007 | Uses configurable timeouts and bounded execution, deterministic calculations, clear module boundaries, local portability, externalized configuration, and declared dependencies. |
+| ARD-TST-001..003, 005, 007..009 | Maps requirements to deterministic contract/agent/security/human-gate tests and regression evidence; fixed mocks and fixtures avoid real systems or model calls in unit tests. |
+| ARD-OSP-001..005 | Preserves the required spec-driven artifacts, testable scenarios, traceability, and explicit non-removal of normative requirements. |
 
 ### Deferred
 
-- **ARD-TEC-006** — MCP is required only when a tool crosses a process or service boundary; the operations tools are in-process, so MCP exposure is deferred without weakening typed validation, allowlisting, timeouts, errors, or audit.
-- **ARD-TEC-007** — asynchronous I/O is a SHOULD; the synchronous foundation adapter contract is retained and bounded by configured timeouts and retries.
-- **ARD-SYS-001, ARD-SYS-002, ARD-SYS-004..006, ARD-CTL-001..005, ARD-CTL-007..017** — orchestration, routing, A2A, conflict detection across agents, compliance gate, scoring, and brief generation belong to later Controller changes; this agent returns evidence only.
-- **ARD-TST-004, ARD-TST-006, ARD-TST-008** — scoring and full multi-agent end-to-end scenarios require the Controller; Operations-level scenarios that feed cases 2, 3 (Operations side), 5-conflict, and 6 are covered here.
-- **ARD-TEC-017..019, ARD-RUB-005..012** — CI, security scanning, peer review, Go/No-Go, and live sponsor communication remain delivery activities; this change retains local test and demonstration evidence only.
+| ARD requirements | Rationale |
+|---|---|
+| ARD-SYS-002, ARD-CTL-001..019, ARD-TST-004 | Controller intake, orchestration, aggregation, compliance gate, weighted scoring, close-score handling, and final recommendation/report ownership are separate work. Operations will return option-level domain findings for later aggregation and will not implement or test Controller ranking. |
+| ARD-SYS-004 and Maintenance/Materials & Logistics collaboration | Operations is a top-level specialist called by the Controller and does not introduce direct peer orchestration. |
+| ARD-RES-001 | Inventory outage and cached-inventory fallback are owned by Materials & Logistics. Operations will report its own unavailable inputs and may not make a cache look current. |
+| ARD-DEP-001 and project-level RAPID/sponsor approval deliverables | Runtime/deployment readiness and cross-project sign-off evidence are not Operations capability behavior; this change will identify evidence to retain, not claim completion. |
 
 ### Out of Scope
 
-- Live airline, schedule, fleet, crew, or package systems and any operational write operation (**ARD-SYS-008, ARD-SEC-002, ARD-GOV-008**).
-- Standalone Risk, Recommendation, or Report agents (**ARD-SYS-002..005**, ADR-001).
+| ARD requirements | Rationale |
+|---|---|
+| ARD-SYS-005..006 and ARD-GOV-006..007 implementation | Final recommendation ownership, approval workflow, and approval-record persistence remain with the Controller/human-approval boundary. This capability only makes its result suitable for those later stages. |
+| ARD-CTL-009..019 and final report generation | Final compliance gating, weighted ranking, close-score selection, and decision-brief rendering are explicitly excluded. |
+| Any operational write or execution | This change adds analysis only; swaps, dispatch, schedule changes, bookings, package transfers, and other operations remain human-controlled and are not invoked by tools. |
 
-No ARD deviation is requested.
+No ARD requirement is weakened or contradicted by this proposal. Operations-originated recommendations remain advisory, evidence-backed, and subject to Controller aggregation and mandatory human approval.
 
 ## Rubric and Capability Coverage
 
-| Rubric checkbox / proposal capability | Operations support | Retained evidence | Verification | Human responsibility |
+| Rubric/capability area | Framework or implementation | Retained evidence | Verification | Human responsibility |
 |---|---|---|---|---|
-| Phase 2: OpenSpec proposal, design, spec delta, task checklist; Pydantic models and tool contracts | New `operations-impact-analysis` spec; typed request, source-data, and result models; tool gateway contracts | This proposal, design, specs, tasks; model and tool contract tests | Requirement-to-test mapping in the verification document | Review that scope and contracts match Operations and Controller owners |
-| Phase 3: schema validation, structured outputs, explicit failures, partial data, no secrets | Deterministic rules, strict boundary validation, labelled partial results, redacted audit events | Test results; sample structured result and audit events | Valid/invalid, stale, partial, conflicting, missing-field, timeout, and malformed-data tests | Validate business thresholds, cost rates, and accepted risks |
-| Phase 4: output validation, unavailable tools, low confidence, regressions | Degraded-mode handling, confidence policy, guardrail on reasoning | Focused pytest summary; named scenario list | Agent tests for normal, partial, missing, conflicting, low-confidence evidence; security tests | Review evidence and confirm intended escalation behavior |
-| Operations capability: flight/route impact, fleet substitution, package load redistribution, delay and swap cost | Rules, redistribution plan, cost components, trade-off statement | Synthetic scenarios including proposal test case 6 and the conflicting-estimate scenario | Exact-value tests on capacity, cut-off, priority order, unprotected remainder, thresholds, cost | Operations owner confirms substitution rules and package priorities |
-| Operations capability: own-network and partner flight sourcing for package rerouting | `find_replacement_flights`, reroute policy in the request, own-first allocation, partner booking deadlines and cost cap | Late-repair scenarios with and without partner flights; flight-search outage scenario | Tests of route match, service level, cut-off, capacity, deadline, policy, ordering, cost, and outage | Humans book any partner or own flight and set the reroute policy; the agent books nothing |
-| ADK agent and bounded model use | ADK `LlmAgent` definition, prompts A/B/C, typed reasoner protocol, deterministic offline reasoner | Prompt text and guardrail tests | Construction test; guardrail rejection tests; no network or model call in tests | Approve any live model configuration and credentials separately |
-| Human approval and auditability | Advisory-only result, approval-required flag, correlated audit events | Sample audit events without sensitive data | Tests that no result approves or executes an action | Ops lead and Maintenance/airworthiness authority retain all approval authority |
+| Category 1: agent functionality and correctness; Phase 3 | Google ADK Operations specialist, Pydantic contracts, typed read-only adapters, deterministic impact and load calculations | Capability spec, contracts, mock fixtures, test results, structured sample outputs | Unit and contract tests for valid/invalid inputs, route/assignment conflicts, swap/delay options, cost, and package protection | Review feasibility and choose whether to escalate; no tool executes an operational action. |
+| Category 2: spec-driven design quality; Phase 2 | OpenSpec capability requirements and scenarios | Proposal, capability spec, design, task checklist, ARD traceability | Validate OpenSpec artifacts and trace each requirement to scenarios/tasks | Peer review confirms scope and ARD alignment. |
+| Category 3: engineering quality; Phases 3–4 | Python, typed contracts, pytest, Ruff, deterministic mock adapters | Test results, code-review record, regression fixtures | Contract, deterministic behavior, timeout/degraded, security, and regression checks | Review results and accept or reject engineering readiness. |
+| Category 4: RAPID controls; Phase 5 | Existing project RAPID process; no new Operations approval authority | RAPID peer-review and Go/No-Go artifacts retained at project level | Verify the analysis is advisory, read-only, and does not bypass approval | Ops lead and Maintenance/airworthiness authority retain approval responsibilities where applicable. |
+| Category 5: AI-assisted development practice; Phase 1 | Existing repository AI-development guidance and review process | Traceable OpenSpec artifacts, test evidence, and peer review | Review generated changes and verify behavior with deterministic tests | Team owns and validates all AI-assisted output. |
+| Category 6: demonstration and communication; Phase 6 | Deterministic mock AOG scenarios and concise structured output | Rehearsable scenario inputs/results and demonstration notes | Demonstrate a normal case, a constrained package redistribution, and degraded/conflicting evidence | Sponsor-facing presenter explains limitations, uncertainty, and the human gate. |
+| Operations impact analysis capability | `operations-impact-analysis` | Per-option evidence, assumptions, risks, costs, missing-data markers, and unprotected-package details | Requirement-to-scenario traceability and deterministic tests | Controller aggregates specialist results; authorized humans make operational decisions. |
 
-The deterministic offline reasoner is a test and demonstration substitute, not evidence of live LLM behavior; live model evaluation requires a separate, approved configuration. Installation or scaffolding alone is not evidence of behavior; retained verification must show these rules and safeguards working.
+The rubric checklist identifies RAPID and sponsor-demo artifacts as later project readiness evidence; installing a framework or passing unit tests alone will not be represented as proof of those controls.

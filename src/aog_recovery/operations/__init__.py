@@ -1,1 +1,1 @@
-"""Operations Agent: per-candidate flight, fleet, and package impact analysis (advisory only)."""
+"""Operations impact-analysis domain."""
