@@ -47,6 +47,20 @@ fields before JSON encoding. Audit records are delivered through an append-only
 sink interface and retain concise rationale and evidence references rather
 than private chain-of-thought.
 
+## Controller Case Context
+
+The Controller context store is append-only and isolates event sequences by
+case ID. Each event carries a stable event ID, event type, case and trace
+context (including correlation ID), timezone-aware occurrence time, direction,
+status, and evidence references. H3/H4 events additionally retain the typed
+exchange record and exchange ID; the request is appended before its response.
+Repeating an identical event ID and payload is idempotent, while reusing an ID
+for different content or appending a response first is a structured recording
+failure. The in-memory store is the deterministic test implementation. Future
+persistence adapters implement the same append/query port and must preserve
+case isolation, ordering, idempotency, and explicit append failure (ARD-CTL-005,
+ARD-SYS-002/004, ARD-OBS-001..004, ARD-SEC-009, ARD-RES-007).
+
 The local adapter can deterministically represent unavailable, timeout,
 malformed, stale, partial, and conflicting responses. Failures carry structured
 errors with no data; degraded results retain partial data and warnings. The

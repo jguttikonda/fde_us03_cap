@@ -1,256 +1,111 @@
+# Spec Delta
+
+## Purpose
+
+The Operations impact-analysis capability evaluates Controller-supplied AOG recovery options against current flight, fleet, crew, customer, schedule, disruption, and package evidence. It returns a structured, advisory-only result that can be aggregated by the Controller and reviewed by authorized humans.
+
 ## ADDED Requirements
 
-### Requirement: Per-candidate operations request and evaluation
+### Requirement: Validate and preserve operational evidence
+The capability MUST validate its structured inputs and preserve the source, observation time, and freshness of operational evidence. It MUST distinguish confirmed facts from assumptions and MUST identify missing or stale required evidence.
 
-The Operations Agent MUST evaluate each candidate recovery option supplied in a validated, versioned request containing the AOG case, the affected flights, an evaluation time, and for each candidate its identifier, option kind (repair with original part, repair with preferred or alternate part, aircraft swap, or flight delay), and for repair and delay candidates the readiness ETA with its basis from Maintenance and Materials & Logistics. A required input that is absent MUST be reported in a missing-data list and MUST NOT be replaced by an unstated assumption or invented ETA.
+#### Scenario: Complete operational evidence
+- **WHEN** the capability receives valid flight, schedule, route, fleet, crew, customer-priority, disruption, and package evidence
+- **THEN** it validates the inputs and retains provenance and observation time for facts used in each option assessment (ARD-OPS-001, ARD-PRN-005, ARD-PRN-007, ARD-SEC-004)
 
-#### Scenario: Every supplied candidate is evaluated
+#### Scenario: Missing or stale evidence
+- **WHEN** a required field is absent or a time-sensitive source is stale
+- **THEN** the result lists the missing or stale evidence, identifies conclusions it cannot support, and does not replace it with an unstated assumption (ARD-OPS-006, ARD-PRN-006, ARD-GOV-005)
 
-- **WHEN** a request contains a repair-with-original-part, a repair-with-alternate-part, a swap, and a delay candidate with a supplied ETA where required
-- **THEN** the result contains one recovery option assessment per candidate identifier with its own impact, package outcome, and cost (ARD-OPS-004, ARD-CTL-018)
+### Requirement: Detect schedule, route, assignment, and feasibility conflicts deterministically
+The capability MUST deterministically validate schedules, route constraints, aircraft assignments, candidate fleet availability, and configured disruption thresholds before producing option assessments.
 
-#### Scenario: Readiness ETA is missing for a repair or delay candidate
+#### Scenario: No conflict for a feasible candidate
+- **WHEN** validated schedule and assignment evidence shows no conflict and a candidate aircraft is available for the required window
+- **THEN** the result reports the checked constraints and the candidate's supported feasibility without claiming that an operational swap has occurred (ARD-OPS-002, ARD-OPS-004, ARD-SEC-002)
 
-- **WHEN** a repair or delay candidate has no readiness ETA
-- **THEN** that candidate is reported as undetermined with the missing input named, no ETA is assumed, the result is not complete, and confidence reflects the gap (ARD-GOV-005, ARD-PRN-005, ARD-OPS-006)
+#### Scenario: Assignment or route conflict
+- **WHEN** an aircraft assignment, route, crew, station, or schedule conflict is detected
+- **THEN** the result identifies the affected resource and conflict, excludes the candidate from feasible options where the deterministic rule requires it, and explains why another supported option is more viable (ARD-OPS-002, ARD-OPS-008)
 
-#### Scenario: Unsupported request version or unknown field
+### Requirement: Assess Controller-supplied recovery options
+For each applicable repair, aircraft-swap, or delay candidate supplied by the Controller, the capability MUST return a consistent operational impact assessment and an estimated cost when the required cost evidence or configured mock estimate is available.
 
-- **WHEN** a request payload has an unsupported schema version, an unknown field, or an invalid field
-- **THEN** boundary validation returns explicit field-level findings and no assessment is produced from it (ARD-DAT-009, ARD-DAT-010, ARD-SEC-004)
+#### Scenario: Repair, swap, and delay comparison
+- **WHEN** the Controller supplies repair ETA, swap, and delay candidates with sufficient operational evidence
+- **THEN** the result describes affected flights and routes, schedule and fleet effects, estimated impact, risks, assumptions, and per-option estimated cost, and identifies the Operations-preferred option with rationale without performing system-wide scoring or ranking (ARD-OPS-003, ARD-OPS-004, ARD-OPS-005, ARD-PRN-004)
 
-### Requirement: Deterministic schedule validation and conflict detection
+#### Scenario: Candidate cost cannot be established
+- **WHEN** required data for an option's cost estimate is unavailable
+- **THEN** the result marks that option's cost as unavailable, identifies the missing evidence, and does not substitute zero or another success-shaped value (ARD-OPS-005, ARD-PRN-006)
 
-The system MUST deterministically validate flight and schedule data and detect route and assignment conflicts without model judgment. A conflict MUST identify the affected resources (flights, aircraft, and crew) and the preferred option's viability relative to alternatives.
+### Requirement: Assess package load redistribution within operational constraints
+The capability MUST assess package redistribution using capacity by aircraft tail, package manifests and service levels, and applicable sort and cut-off windows. It MUST report packages that cannot be protected and include their exposure in the option's impact and cost assessment.
 
-#### Scenario: Affected flight is validated against the schedule
+#### Scenario: Capacity and cut-off permit partial redistribution
+- **WHEN** an affected flight has 1,200 packages including 700 priority packages, a spare aircraft has capacity for 900, and redistribution is within the applicable sort and cut-off window
+- **THEN** the result protects all 700 priority packages and no more than 200 other packages, reports the remaining 300 packages as unprotected by service level, and includes their exposure in the option impact and cost (ARD-OPS-009, ARD-TST-006)
 
-- **WHEN** the schedule source returns the affected flights with consistent assignments and times
-- **THEN** each flight is recorded as validated with its route, scheduled departure, and assigned aircraft, and missing flights are listed as missing data (ARD-OPS-001, ARD-OPS-002)
+#### Scenario: Alternate flight is past cut-off
+- **WHEN** an alternate flight has spare capacity but the package arrival would miss its cut-off
+- **THEN** the capability assigns no packages to that flight, records the cut-off constraint, and reports the resulting unprotected package count and service-level exposure (ARD-OPS-009, ARD-PRN-003)
 
-#### Scenario: Swap aircraft is double-booked or crew coverage is missing
+### Requirement: Return a structured Operations assessment for Controller aggregation
+The capability MUST return a versioned, validated result containing status, impact classification, affected routes and flights, option-level impacts, package impact, evidence, missing data, assumptions, risks, recommendation, confidence, rationale, and next steps. It MUST remain a domain assessment and MUST NOT generate the Controller's final report or weighted ranking.
 
-- **WHEN** a swap candidate aircraft has an overlapping assignment or the crew coverage is a gap
-- **THEN** the system reports a route or assignment conflict naming the affected aircraft, flights, and crew, and the swap option is marked not viable without hiding the conflict (ARD-OPS-002, ARD-OPS-008)
+#### Scenario: Structured result for a candidate
+- **WHEN** an option assessment completes with sufficient evidence
+- **THEN** the result conforms to the Operations contract, classifies impact as low, medium, high, or critical, and separates source-backed evidence from assumptions and model explanation (ARD-OPS-003, ARD-OPS-005, ARD-PRN-005, ARD-PRN-007)
 
-### Requirement: Fleet substitution evaluation
+#### Scenario: Materially different customer impacts
+- **WHEN** multiple feasible options have materially different customer or service-level impacts
+- **THEN** the result presents each option's trade-offs and does not hide an alternative behind a single recommendation (ARD-OPS-007)
 
-The system MUST deterministically select substitute-aircraft candidates that are serviceable, of a compatible type, positioned within the configured positioning limit, and available within the swap window, using a deterministic ordering (earliest availability, then larger package capacity, then aircraft identifier).
+### Requirement: Represent uncertainty, conflict, and degraded analysis
+The capability MUST label incomplete or time-sensitive analysis provisional, apply the confidence thresholds, and represent conflicting evidence, missing analysis, and tool failures visibly. It MUST distinguish supported conclusions from conclusions that cannot be established.
 
-#### Scenario: Swap aircraft is available
+#### Scenario: Conflicting operational evidence
+- **WHEN** two current sources disagree materially about a schedule, route, assignment, or recovery time
+- **THEN** the result identifies both conflicting values and their provenance, marks the affected conclusion provisional or escalated, and defers approval regardless of numeric confidence (ARD-OPS-006, ARD-PRN-006, ARD-GOV-004)
 
-- **WHEN** at least one serviceable compatible aircraft is available within the swap window
-- **THEN** the swap candidate uses the first aircraft in the deterministic order and records its tail, availability, and capacity (ARD-OPS-001, ARD-OPS-002, ARD-OPS-004, ARD-NFR-003)
+#### Scenario: Maintenance and Operations recovery estimates conflict
+- **WHEN** a Controller-supplied Maintenance return-to-service estimate materially conflicts with the Operations schedule or disruption evidence for the same recovery option
+- **THEN** the result preserves both estimates with their sources, marks the affected option provisional or escalated, and identifies the conflict for Controller and human review without invoking another agent or resolving the conflict by assumption (ARD-OPS-006, ARD-PRN-006, ARD-GOV-004, ARD-TST-006)
 
-#### Scenario: No swap aircraft is available
+#### Scenario: Low confidence requires escalation
+- **WHEN** analysis confidence is below 0.50
+- **THEN** the result marks the assessment for escalation and lists data needed to improve it; confidence from 0.50 through 0.69 is provisional, and confidence at or above 0.70 remains a preferred path only (ARD-GOV-001..003, ARD-GOV-005)
 
-- **WHEN** no aircraft satisfies the substitution rules
-- **THEN** the swap candidate is reported as not viable with the reason and no substitute is fabricated (ARD-OPS-004, ARD-PRN-005)
+#### Scenario: Operations adapter times out
+- **WHEN** an allowlisted Operations adapter exceeds its configured timeout
+- **THEN** the result records a structured timeout warning, identifies the unavailable analysis, preserves only conclusions supported by available evidence, and applies the confidence or escalation policy (ARD-RES-002..006, ARD-NFR-001..002)
 
-### Requirement: Configured disruption impact classification
+### Requirement: Preserve advisory-only, read-only, and auditable boundaries
+The capability MUST expose only allowlisted, least-privilege read-only tools and MUST NOT execute schedule changes, aircraft swaps, dispatch, bookings, package transfers, or approval actions. It MUST reject untrusted data that attempts to change policy or tool permissions and MUST emit traceable events without requiring private chain-of-thought.
 
-The system MUST classify operational impact as low, medium, high, or critical using externally configured delay thresholds, raising the level by one step (not above critical) when an affected flight is service-critical or time-critical packages remain unprotected. Given identical inputs and settings the classification MUST be identical.
+#### Scenario: Recommendation awaits human decision
+- **WHEN** the capability returns a high-confidence preferred option
+- **THEN** the result remains advisory, no operational action is invoked, and approval remains with the authorized human boundary (ARD-PRN-001..002, ARD-GOV-001, ARD-GOV-006..008, ARD-SEC-002)
 
-#### Scenario: Threshold boundaries
+#### Scenario: Tool content attempts to override policy
+- **WHEN** external operational data contains instructions to expand tool access, suppress uncertainty, or bypass human approval
+- **THEN** the content is treated as untrusted data and cannot change the capability's policy, allowlist, assigned role, or approval boundary (ARD-SEC-003..005, ARD-SEC-008)
 
-- **WHEN** the schedule delay equals each configured threshold boundary
-- **THEN** the classification is the exact level configured for that boundary and one minute below the boundary yields the lower level (ARD-OPS-003, ARD-NFR-003, ARD-NFR-006)
+#### Scenario: Auditable degraded result
+- **WHEN** validation, tool invocation, conflict detection, or fallback affects an assessment
+- **THEN** structured events identify timestamp, event type, case and correlation identifiers, component, status, and schema version, while sensitive data and private chain-of-thought are excluded (ARD-PRN-008, ARD-OBS-001..004, ARD-SEC-006..007)
 
-#### Scenario: Service-critical uplift
+### Requirement: Verify behavior with deterministic tests
+The capability MUST have contract and agent tests for valid and invalid input, normal and partial evidence, conflict, low confidence, timeout, package redistribution, read-only behavior, and the human-approval boundary. Unit tests MUST use deterministic fixtures and mock adapters without network or live model calls.
 
-- **WHEN** a seven-hour delay affects a service-critical flight
-- **THEN** the classification is critical and the applied rule is recorded (ARD-OPS-003)
+#### Scenario: Deterministic contract and behavior tests
+- **WHEN** tests run repeatedly with identical validated fixtures and mock responses
+- **THEN** validation, conflict checks, capacity calculations, impact classification, and structured results are repeatable, and failures are visible rather than success-shaped (ARD-TEC-008, ARD-NFR-003, ARD-TST-001..003, ARD-TST-009)
 
-### Requirement: Package load redistribution
+#### Scenario: Security and approval boundary tests
+- **WHEN** tests exercise unauthorized tool access, malformed external data, prompt injection, or a high-confidence recommendation
+- **THEN** unauthorized or malformed inputs are rejected or visibly degraded, no write operation occurs, and no result bypasses human approval (ARD-SEC-001..008, ARD-TST-005, ARD-TST-007)
 
-The system MUST evaluate redistribution of packages from affected flights to the swap aircraft or to other flights, within aircraft capacity by tail, service level, and sort and cut-off windows, using manifest and capacity data. Packages MUST be allocated in deterministic service-level priority order. Packages that cannot be protected MUST be reported as unprotected and included in the option's impact and cost.
-
-#### Scenario: Capacity-limited redistribution with unprotected remainder
-
-- **WHEN** an affected flight carries 1,200 packages of which 700 are priority, a spare aircraft has capacity for 900 and is ready before the 17:30 cut-off, and no other capacity exists
-- **THEN** all 700 priority packages and 200 standard packages are redistributed, 300 standard packages are reported as unprotected, and the unprotected count appears in the option impact and cost (ARD-OPS-009, ARD-OPS-005, Proposal test case 6)
-
-#### Scenario: Target misses the cut-off
-
-- **WHEN** a target aircraft or flight cannot depart before a package group's cut-off
-- **THEN** that group is not allocated to that target and is reported as unprotected if no other target qualifies (ARD-OPS-009)
-
-#### Scenario: Package data is unavailable
-
-- **WHEN** the package load source fails or returns no manifest for an affected flight
-- **THEN** package impact is reported as not assessed, listed as missing analysis, and no package count is assumed (ARD-OPS-009, ARD-GOV-005, ARD-RES-004)
-
-### Requirement: Operational cost component
-
-The system MUST compute for each candidate an estimated operational cost in USD from externally configured mock rates, composed of delay cost, swap cost, rerouting cost on own-network and partner flights, and unprotected package cost, with the components retained in the result. The Operations cost MUST NOT include repair labor or part sourcing cost.
-
-#### Scenario: Cost components sum to the estimate
-
-- **WHEN** a candidate has delay minutes, a swap, rerouted packages, and unprotected packages
-- **THEN** the estimate equals the sum of the delay, swap, rerouting, and unprotected-package components using the configured rates (ARD-CTL-019, ARD-OPS-009)
-
-### Requirement: Own-network and partner flight sourcing for package rerouting
-
-The system MUST search own-network and partner flights on each affected route and MUST report every flight found with its carrier type, departure, spare capacity, cost per package, accepted service levels, booking deadline, and whether it is usable and, if not, why. A flight MUST NOT be used when it is a partner flight the request's reroute policy forbids, a partner flight above the policy cost cap, already departed, past its booking deadline, without spare capacity, not accepting the package service level, on a different route, or departing after the package group's cut-off. Own-network flights MUST be used before partner flights when the policy prefers the own network. Rerouting MUST use direct flights only and MUST consume each flight's capacity once. The agent MUST NOT book a flight or move a package; partner use MUST be flagged for human booking.
-
-#### Scenario: Own network first, then partner
-
-- **WHEN** a late repair leaves 1,200 packages without their aircraft before a 17:30 cut-off, with one own flight of 150 capacity and usable partner flights
-- **THEN** priority packages fill the own flight first and the remaining partner capacity next, standard-only partner flights take only standard packages, and the remainder is reported unprotected with the rerouting cost (ARD-OPS-009, ARD-CTL-019)
-
-#### Scenario: Policy and usability limits
-
-- **WHEN** the policy forbids partner flights, caps partner cost, or a flight misses its booking deadline or the package cut-off
-- **THEN** that flight is listed as not usable with the reason and receives no packages (ARD-OPS-009, ARD-PRN-005)
-
-#### Scenario: Flight search unavailable
-
-- **WHEN** the alternate flight source is unavailable or times out
-- **THEN** the result is partial with a warning, the flight search is named as missing analysis, unprotected counts are stated as upper bounds, cost is marked incomplete, and confidence is reduced (ARD-RES-002, ARD-RES-004, ARD-RES-006, ARD-GOV-005)
-
-#### Scenario: Humans book flights
-
-- **WHEN** a result relies on partner flights
-- **THEN** the risk factors and next steps state that humans must book them before the deadlines and the agent books nothing (ARD-PRN-001, ARD-GOV-008)
-
-### Requirement: Time-sensitive and incomplete data handling
-
-The system MUST mark an Operations result provisional or partial when operational data is incomplete, stale beyond the configured maximum age, or reported as partial by its source, MUST label stale evidence with its source and retrieval time, and MUST lower confidence by the configured policy.
-
-#### Scenario: Schedule data is stale
-
-- **WHEN** the schedule evidence is older than the configured maximum age relative to the evaluation time
-- **THEN** the evidence is labelled stale, the result is partial, confidence is reduced, and the staleness is visible in warnings and the audit trail (ARD-OPS-006, ARD-RES-006, ARD-DAT-005)
-
-#### Scenario: Source returns partial data
-
-- **WHEN** a source reports partial data
-- **THEN** the affected conclusions are stated as not fully supported and the result is not complete (ARD-OPS-006, ARD-RES-004)
-
-### Requirement: Timeout and unavailable-source handling
-
-A failed, unavailable, or timed-out operations source MUST be recorded as a structured failure with component, error category, retryability, and case impact. Retries MUST be bounded, MUST reuse the same request identifier, and MUST NOT erase the original failure. The result MUST include a warning, name the missing analysis, and apply the confidence and escalation policy. No source failure MAY produce a success-shaped result.
-
-#### Scenario: Package load source times out
-
-- **WHEN** the package load source times out on every bounded attempt
-- **THEN** the result is partial with a warning, package impact is named as missing analysis, a structured timeout failure is retained, and confidence is reduced (ARD-RES-002, ARD-RES-003, ARD-RES-005, ARD-RES-006)
-
-#### Scenario: Essential schedule source is unavailable
-
-- **WHEN** the flight schedule source is unavailable
-- **THEN** the result status is failed with a structured error and zero confidence, no recovery option is assessed, and escalation is indicated (ARD-RES-003, ARD-GOV-003)
-
-#### Scenario: Retry is bounded and idempotent
-
-- **WHEN** a retryable failure occurs
-- **THEN** at most the configured number of retries is made, each with the original request identifier (ARD-RES-005, ARD-NFR-002)
-
-### Requirement: Conflicting time estimates and material customer trade-offs
-
-The system MUST report a conflict when the operationally feasible departure for a candidate differs from the supplied Maintenance or Materials & Logistics ETA by more than the configured conflict threshold, preserving both estimates and their evidence references. A conflict MUST make the result escalation-required and defer approval regardless of numeric confidence. When more than one operationally viable candidate has materially different customer or package impact, the alternatives and trade-offs MUST be presented for human selection.
-
-#### Scenario: Maintenance and Operations estimates conflict
-
-- **WHEN** Maintenance supplies a three-hour ETA and crew availability makes the earliest feasible departure seven hours out
-- **THEN** a conflict records both estimates and references, the status is escalation-required, and human adjudication is required (ARD-GOV-004, Proposal scenario: Conflicting Data)
-
-#### Scenario: Viable options differ materially in customer impact
-
-- **WHEN** two viable candidates differ in unprotected packages or impact level beyond the configured materiality limits
-- **THEN** both are reported with their trade-offs and the result requires human selection, with no candidate ranked (ARD-OPS-007, ARD-CTL-015)
-
-### Requirement: Structured operations result and confidence
-
-The system MUST return the shared agent-result envelope with an Operations payload containing affected routes, impact level, per-candidate recovery options with impact estimates and cost, package impact, risk factors, assumptions, missing data, conflicts, warnings, a recommendation limited to the evaluated candidate's operational viability, confidence, reasoning, and next steps. Confidence MUST be computed by deterministic policy and classified by the shared thresholds. The result MUST NOT rank options, approve a plan, or claim safety or airworthiness.
-
-#### Scenario: Normal evidence
-
-- **WHEN** all sources are current and complete with no conflict
-- **THEN** the result status is complete, confidence is at least 0.70, the disposition is preferred, and human approval is still required (ARD-OPS-005, ARD-GOV-001, ARD-GOV-008)
-
-#### Scenario: Provisional confidence
-
-- **WHEN** confidence is from 0.50 through 0.69
-- **THEN** the result is marked provisional and requires human review before action (ARD-GOV-002, ARD-OPS-006)
-
-#### Scenario: Low confidence
-
-- **WHEN** confidence is below 0.50
-- **THEN** the result requires escalation for additional data or explicit human override (ARD-GOV-003)
-
-#### Scenario: Evidence references resolve
-
-- **WHEN** the result is validated against the evidence produced for the case
-- **THEN** every evidence reference and assumption reference resolves and the envelope passes shared agent-result validation (ARD-CTL-006, ARD-DAT-004)
-
-### Requirement: Bounded reasoning with deterministic guardrails
-
-The system MUST confine model judgment to explanation and trade-off narrative over deterministic facts, accessed only through Google ADK-governed interfaces, and MUST validate the reasoning output before it is returned. Reasoning that alters computed values, claims safety or airworthiness, implies approval or execution, or is empty MUST be rejected, the rejection MUST be visible as a warning, and the deterministic summary MUST be used with its source labelled.
-
-#### Scenario: Reasoning is accepted
-
-- **WHEN** the reasoner returns a non-empty explanation consistent with the computed facts
-- **THEN** it is included in the result with the reasoner mode labelled (ARD-PRN-003, ARD-PRN-004, ARD-OPS-005)
-
-#### Scenario: Reasoning claims airworthiness or approval
-
-- **WHEN** the reasoner output states the aircraft is safe or airworthy, or that a plan is approved or executed
-- **THEN** the guardrail rejects it, a warning names the rejection, and the deterministic narrative is used (ARD-SEC-008, ARD-GOV-008, ARD-RES-006)
-
-#### Scenario: ADK agent definition and no model call in tests
-
-- **WHEN** the ADK agent definition is built
-- **THEN** it is a Google ADK `LlmAgent` carrying the grounding, trade-off, and validation prompts and only read-only allowlisted tools, and no test invokes a model or network (ARD-TEC-002, ARD-TEC-005, ARD-TST-009)
-
-### Requirement: Untrusted tool data and read-only allowlisted access
-
-Operations tool responses MUST be validated as untrusted input; invalid or unknown-field data MUST become a structured malformed-data failure. Free text from tools MUST NOT be passed to the reasoner, change policy, authorize tools, or alter the agent's role. The Operations Agent MUST use only read-only operations tools it is allowlisted for and MUST NOT perform any operational action.
-
-#### Scenario: Malformed source data
-
-- **WHEN** a source returns data that fails validation
-- **THEN** the source is recorded as a structured malformed-data failure and its data is not used (ARD-SEC-004, ARD-DAT-008, ARD-TST-007)
-
-#### Scenario: Prompt-injection text in tool data
-
-- **WHEN** a disruption description contains instructions to approve a plan or change tool access
-- **THEN** the text is not used in reasoning or output, the assessment values are unchanged, and no approval, execution, or tool-scope change occurs (ARD-SEC-005, ARD-TST-007)
-
-#### Scenario: Role not allowlisted
-
-- **WHEN** a non-Operations specialist role requests an operations-only tool
-- **THEN** the adapter returns a structured role-not-allowlisted failure and no data (ARD-SEC-001, ARD-SEC-003, ARD-TST-007)
-
-#### Scenario: Advisory-only boundary
-
-- **WHEN** any result is produced, including high-confidence, degraded, or test-mode results
-- **THEN** the payload states advisory-only and human approval required, and no write capability exists in the agent or its tools (ARD-PRN-001, ARD-PRN-002, ARD-GOV-008, ARD-SEC-002, ARD-TST-005)
-
-### Requirement: Correlated audit events and case isolation
-
-The system MUST emit structured, redacted, correlated audit events for operations intake validation, tool results, fallback or degradation, conflict, escalation, and assessment completion, containing timestamp, event type, case identifier, trace and correlation identifiers, component, status, and schema version, and concise rationale without private reasoning. A failure in one case MUST NOT affect another case's results.
-
-#### Scenario: Events carry required metadata
-
-- **WHEN** an assessment runs
-- **THEN** each emitted event carries the required fields, evidence references, and concise rationale (ARD-OBS-001, ARD-OBS-002, ARD-OBS-004, ARD-SEC-007)
-
-#### Scenario: Case isolation
-
-- **WHEN** two cases are assessed and one source fails for one case
-- **THEN** the other case's result, evidence, and events are unaffected (ARD-RES-007)
-
-### Requirement: Reserved flight capacity
-
-The system MUST exclude from rerouting any package capacity that the request reports as already reserved on an alternate flight by another recovery action, MUST list a flight whose capacity is fully reserved as not usable with that reason, and MUST record the exclusion as an assumption. Reservations are supplied by the Controller; the agent MUST NOT create, change, or release them.
-
-#### Scenario: Capacity reserved by another action
-
-- **WHEN** an own-network flight has 150 spare packages and 150 are reserved by a Materials & Logistics shipment
-- **THEN** the flight is not usable, packages go to other usable flights or are reported unprotected, and the assumptions name the reserved capacity (ARD-OPS-009, ARD-RES-006)
-
-#### Scenario: Partial reservation
-
-- **WHEN** 100 of 150 spare packages are reserved
-- **THEN** only 50 are offered for rerouting (ARD-OPS-009)
+#### Scenario: Functional package and conflict regressions
+- **WHEN** fixed regression fixtures exercise a feasible swap and a route/assignment conflict alongside constrained package capacity and cut-off windows
+- **THEN** the tests verify the supported swap candidate, conflict explanation, protected and unprotected package counts, and cost-impact inclusion (ARD-TST-003, ARD-TST-006, ARD-TST-008..009)

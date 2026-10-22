@@ -1,5 +1,6 @@
 """Typed, read-only Materials & Logistics source adapters (ARD-MLG-001..009)."""
 
+import json
 from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
@@ -107,6 +108,29 @@ class MaterialsToolResult(ContractModel):
         return self
 
 
+class MaterialsToolReadEnvelope(ContractModel):
+    """Primary inventory result plus its optional, separately labeled cache result."""
+
+    schema_version: Literal["1.0"]
+    results: tuple[MaterialsToolResult, ...] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def require_correlated_fallback_results(self) -> MaterialsToolReadEnvelope:
+        primary = self.results[0]
+        if any(
+            (item.request_id, item.case_id, item.trace_context)
+            != (primary.request_id, primary.case_id, primary.trace_context)
+            for item in self.results[1:]
+        ):
+            raise ValueError("inventory results must match request and case context")
+        if len(self.results) == 2 and (
+            primary.status is not ToolResultStatus.FAILED
+            or self.results[1].status not in {ToolResultStatus.PARTIAL, ToolResultStatus.FAILED}
+        ):
+            raise ValueError("cache result requires a failed primary and degraded cache read")
+        return self
+
+
 class MaterialsReadOnlyAdapter(Protocol):
     tool_name: MaterialsToolName
     allowed_roles: frozenset[AgentRole]
@@ -116,6 +140,104 @@ class MaterialsReadOnlyAdapter(Protocol):
         request: MaterialsReadRequest,
         caller_role: AgentRole,
     ) -> MaterialsToolResult: ...
+
+
+def read_inventory_with_cache_fallback(
+    source_adapter: MaterialsReadOnlyAdapter,
+    cache_adapter: MaterialsReadOnlyAdapter | None,
+    request: MaterialsReadRequest,
+    caller_role: AgentRole,
+) -> tuple[MaterialsToolResult, ...]:
+    source_result = source_adapter.read(request, caller_role)
+    if (
+        request.tool_name is not MaterialsToolName.PART_INVENTORY
+        or source_result.error is None
+        or source_result.error.category not in {"source_unavailable", "timeout"}
+        or cache_adapter is None
+        or cache_adapter.tool_name is not MaterialsToolName.PART_INVENTORY
+        or caller_role not in cache_adapter.allowed_roles
+    ):
+        return (source_result,)
+
+    cache_result = cache_adapter.read(request, caller_role)
+    if (
+        cache_result.request_id != request.request_id
+        or cache_result.case_id != request.case_id
+        or cache_result.trace_context != request.trace_context
+    ):
+        return (
+            source_result,
+            _cache_failure(
+                request,
+                cache_result.source,
+                cache_result.completed_at,
+                "cache_contract_mismatch",
+                "cached inventory response does not match the request context",
+            ),
+        )
+    if cache_result.status is ToolResultStatus.FAILED:
+        return (source_result, cache_result)
+    if not cache_result.evidence:
+        return (
+            source_result,
+            _cache_failure(
+                request,
+                cache_result.source,
+                cache_result.completed_at,
+                "cache_evidence_unavailable",
+                "cached inventory response contains no evidence",
+            ),
+        )
+
+    cached_result = cache_result.model_copy(
+        update={
+            "status": ToolResultStatus.PARTIAL,
+            "evidence": tuple(
+                evidence.model_copy(update={"validity_state": EvidenceValidity.STALE})
+                for evidence in cache_result.evidence
+            ),
+            "warnings": (
+                *cache_result.warnings,
+                EvidenceWarning(
+                    warning_id=f"cached-evidence-{request.request_id}",
+                    claim_reference=f"tool-request:{request.request_id}",
+                    code="CACHED_EVIDENCE",
+                    message="inventory source failed; cached evidence may be stale",
+                    source_reference=cache_result.source,
+                ),
+            ),
+            "error": None,
+        }
+    )
+    return source_result, cached_result
+
+
+def _cache_failure(
+    request: MaterialsReadRequest,
+    source: str,
+    completed_at: datetime,
+    category: str,
+    message: str,
+) -> MaterialsToolResult:
+    return MaterialsToolResult(
+        schema_version="1.0",
+        request_id=request.request_id,
+        case_id=request.case_id,
+        trace_context=request.trace_context,
+        source=source,
+        completed_at=completed_at,
+        status=ToolResultStatus.FAILED,
+        evidence=None,
+        warnings=(),
+        error=StructuredError(
+            schema_version="1.0",
+            category=category,
+            component="materials-adapter:part_inventory_cache",
+            message=message,
+            retryable=False,
+            case_impact="cached inventory evidence is unavailable",
+        ),
+    )
 
 
 class LocalMaterialsReadOnlyAdapter:
@@ -251,23 +373,45 @@ class LocalMaterialsReadOnlyAdapter:
 def build_materials_adk_tool(
     adapter: MaterialsReadOnlyAdapter,
     caller_role: AgentRole,
+    *,
+    cache_adapter: MaterialsReadOnlyAdapter | None = None,
 ) -> FunctionTool:
     if caller_role not in adapter.allowed_roles:
         raise PermissionError(f"{caller_role.value} cannot access {adapter.tool_name.value}")
+    if cache_adapter is not None and (
+        adapter.tool_name is not MaterialsToolName.PART_INVENTORY
+        or cache_adapter.tool_name is not MaterialsToolName.PART_INVENTORY
+    ):
+        raise ValueError("inventory cache fallback is only valid for part inventory")
 
     def read_source(request: dict[str, object]) -> dict[str, object]:
         """Read one allowlisted Materials source using a validated request."""
         try:
-            validated_request = MaterialsReadRequest.model_validate(
-                {**request, "tool_name": adapter.tool_name.value}
+            validated_request = MaterialsReadRequest.model_validate_json(
+                json.dumps({**request, "tool_name": adapter.tool_name.value})
             )
-        except ValidationError as exc:
+        except (TypeError, ValueError, ValidationError) as exc:
             raise ValueError("materials source request failed schema validation") from exc
-        result = adapter.read(validated_request, caller_role)
-        return result.model_dump(mode="json")
+        if cache_adapter is None:
+            return adapter.read(validated_request, caller_role).model_dump(mode="json")
+        results = read_inventory_with_cache_fallback(
+            adapter,
+            cache_adapter,
+            validated_request,
+            caller_role,
+        )
+        return MaterialsToolReadEnvelope(schema_version="1.0", results=results).model_dump(
+            mode="json"
+        )
 
     read_source.__name__ = f"read_{adapter.tool_name.value}"
-    read_source.__doc__ = f"Read synthetic {adapter.tool_name.value.replace('_', ' ')} evidence."
+    read_source.__doc__ = (
+        f"Read synthetic {adapter.tool_name.value.replace('_', ' ')} evidence using a validated "
+        "read request. Valid inputs include request, case, trace, tool, and part/station fields. "
+        "Returns one Materials result, or a versioned source/cache envelope when a cache adapter "
+        "is configured. Cache is queried only for unavailable or timed-out inventory; malformed "
+        "and unauthorized reads are not retried. Failed reads remain structured results."
+    )
     return FunctionTool(func=read_source)
 
 
@@ -288,9 +432,17 @@ def build_materials_mcp_toolset(
 def build_materials_adk_tools(
     adapters: Mapping[MaterialsToolName, MaterialsReadOnlyAdapter],
     caller_role: AgentRole,
+    *,
+    inventory_cache_adapter: MaterialsReadOnlyAdapter | None = None,
 ) -> tuple[FunctionTool, ...]:
     return tuple(
-        build_materials_adk_tool(adapter, caller_role)
+        build_materials_adk_tool(
+            adapter,
+            caller_role,
+            cache_adapter=(
+                inventory_cache_adapter if tool_name is MaterialsToolName.PART_INVENTORY else None
+            ),
+        )
         for tool_name, adapter in adapters.items()
         if caller_role in MATERIALS_TOOL_ROLE_ALLOWLIST[tool_name]
     )

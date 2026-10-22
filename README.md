@@ -1,7 +1,7 @@
 # FDE US03 Capstone Project
 
 ## Project Overview
-This repository contains the design and proposal for an Aircraft-On-Ground (AOG) Recovery Coordinator built as an Agent-to-Agent (A2A) decision support system using Google ADK.
+This repository implements an advisory-only Aircraft-On-Ground (AOG) Recovery Coordinator with Controller, Maintenance, Materials & Logistics, and Operations agent workflows. Enterprise integrations are deterministic local/mock adapters; no live airline systems or operational write actions are enabled.
 
 The project focuses on helping airline operations teams respond to aircraft ground events faster, more consistently, and with clearer human oversight.
 
@@ -79,53 +79,134 @@ This project aims to:
 
 ## Development Setup
 
-The complete locked runtime and development package export, including hashes,
-is available in [envsetuprequirements.txt](envsetuprequirements.txt). It is
-generated from `uv.lock`; regenerate it after dependency changes with:
+The project supports Python 3.14.x (`requires-python` is `>=3.14,<3.15`) and
+uses `uv.lock` for reproducible runtime and development dependencies. The
+complete package export, including hashes, is available in
+[envsetuprequirements.txt](envsetuprequirements.txt). Regenerate it after
+dependency changes with:
 
 ```powershell
 uv export --locked --all-groups --format requirements-txt --no-emit-project --output-file envsetuprequirements.txt
 ```
 
-For the standard project environment, use `uv sync`; it reads dependencies from
-`pyproject.toml` and `uv.lock` rather than from the export file.
-
-The project requires Python 3.14 and uses `uv` to create an isolated environment
-and install the Google ADK, Pydantic, and development tools declared in
-`pyproject.toml`.
-
-From the repository root in PowerShell:
+From the repository root in PowerShell, install the locked runtime and all
+development tools, validate local configuration, and run the offline demo:
 
 ```powershell
-uv sync --all-groups --locked
+uv sync --locked --all-groups
 uv run python --version
+uv run python -c "from aog_recovery.config import AogSettings; settings = AogSettings(); print(f'configuration valid; adapter_mode={settings.adapter_mode.value}')"
+uv run python -m aog_recovery.operations.demo normal_repair --json
+```
+
+The default adapter mode is `local`; `AOG_*` settings have validated defaults.
+Run the deterministic tests and code checks with:
+
+```powershell
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 ```
 
-### Gemini API key
+### Optional ADK model configuration
 
-The local `.env` file is ignored by Git. Add your Google AI Studio key to its
-`GOOGLE_API_KEY` entry; do not commit or share this file. For a fresh checkout,
-copy `.env.example` to `.env` first. The project uses `GOOGLE_GENAI_USE_VERTEXAI=FALSE`
-for API-key authentication. To pass the key to a command, use:
+The offline demo and tests do not require a model credential. The optional
+model-backed ADK configuration uses the provider-specific variable names shown
+in `.env.example` (including `GEMINI_API_KEY` and `ADK_MODEL`). For a model-backed
+run, copy `.env.example` to `.env` and replace placeholders using the approved
+secret source for your environment. The `.env` file is ignored by Git; never
+commit it, put a real key in documentation or tests, or print it to logs.
+`OperationsSettings` treats `GEMINI_API_KEY` as secret-typed and excludes it
+from representations and serialization. The model-backed Operations ADK web
+entry point fails fast when the key is absent or still the example placeholder.
+This local check does not contact the provider; a non-placeholder key's
+authenticity remains unverified until an authorized model-backed request.
+
+#### Controller ADK Web demo
+
+The Controller ADK Web root exposes only the four named synthetic scenarios.
+After configuring a non-placeholder `GEMINI_API_KEY` in the ignored `.env` file,
+launch it from the repository root with:
+
+```powershell
+uv run --env-file .env adk web adk_agents/controller_agent
+```
+
+The browser conversation uses the model provider to interpret the request and
+explain the result. The selected case, specialist findings, evidence, and
+Operations data are fixed synthetic values; no live enterprise records or
+operational writes are available. Startup rejects a missing or template key;
+this local check does not validate the key with the provider. ADK Web is an
+unauthenticated local development server; keep its
+default loopback binding and do not expose it to an untrusted network.
+
+To load the optional model configuration for a command:
 
 ```powershell
 uv run --env-file .env <command>
 ```
 
-VS Code Python terminals are configured to load `.env` when opened. Restart
-existing terminals after changing the file. Never paste the API key into source,
-tests, logs, or chat.
+The local readiness check does not require `.env`; a missing or invalid model
+credential must not be replaced with a fabricated value. Restart VS Code
+terminals after changing local environment configuration.
+
+### Startup and local readiness
+
+There is no always-on Controller web service or HTTP health endpoint in this
+capstone implementation. A local ADK Web demonstration is available under
+`adk_agents/controller_agent`; it is not a deployed or authenticated service.
+Run the Operations synthetic smoke demo with
+`uv run python -m aog_recovery.operations.demo`; it uses deterministic local
+adapters and makes no model, network, or operational calls. The configuration
+check and `uv run pytest` above are the local readiness checks. They verify the
+environment and mock workflows only; they do not prove live enterprise
+connectivity, production deployment readiness, airworthiness, or operational
+approval. The optional ADK web entry point under `adk_agents/operations_agent`
+remains an Operations-only demonstration.
 
 VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace
 interpreter at `.venv\Scripts\python.exe` or reload the window.
 
+### Operations analysis settings
+
+For an interactive peer-review demo using synthetic fixtures and live Gemini
+reasoning, see [the ADK Web runbook](docs/operations-adk-web-peer-review.md).
+
+Operations settings use the `AOG_` environment prefix and are validated by
+`AogSettings`. Defaults are for deterministic local/mock analysis only; mock
+costs are illustrative and are not estimates of real operating expenses.
+
+| Setting | Default | Purpose |
+|---|---:|---|
+| `AOG_TOOL_TIMEOUT_SECONDS` | `10` | Timeout for each read-only adapter call |
+| `AOG_AGENT_TIMEOUT_SECONDS` | `30` | Timeout for bounded Operations reasoning |
+| `AOG_OPERATIONS_MAX_READ_RETRIES` | `1` | Maximum retries for retryable idempotent reads |
+| `AOG_OPERATIONS_SOURCE_FRESHNESS_SECONDS` | `900` | Maximum source age before evidence is treated as stale |
+| `AOG_OPERATIONS_MEDIUM_DELAY_MINUTES` | `30` | Lower bound for medium operational impact |
+| `AOG_OPERATIONS_HIGH_DELAY_MINUTES` | `120` | Lower bound for high operational impact |
+| `AOG_OPERATIONS_CRITICAL_DELAY_MINUTES` | `300` | Lower bound for critical operational impact |
+| `AOG_OPERATIONS_SERVICE_LEVEL_ORDER` | `["priority","standard"]` | Stable package-allocation priority, encoded as JSON |
+| `AOG_OPERATIONS_CONFIDENCE_DEGRADATION_PER_ISSUE` | `0.10` | Confidence reduction for each distinct missing/degraded issue |
+| `AOG_OPERATIONS_MOCK_COST_CURRENCY` | `USD` | Currency for mock line items |
+| `AOG_OPERATIONS_MOCK_DELAY_COST_PER_MINUTE` | `1.00` | Illustrative delay cost rate |
+| `AOG_OPERATIONS_MOCK_SWAP_FLAT_COST` | `500.00` | Illustrative aircraft-swap cost |
+| `AOG_OPERATIONS_MOCK_UNPROTECTED_PACKAGE_EXPOSURE` | `2.00` | Illustrative exposure per unprotected package |
+
+Impact thresholds must be strictly increasing, and the service-level order must
+be non-empty with no duplicate names. An unset optional cost rate makes the
+corresponding estimate unavailable; it is not silently treated as zero.
+
 ## Project Status
-This repository is currently in the proposal and architecture design phase for an enterprise AOG decision-support system.
+The four-agent advisory workflow and deterministic local/mock adapters are
+implemented, and automated readiness verification is recorded. Live enterprise
+integration and production deployment are out of scope; qualified peer review,
+team Go/No-Go, sponsor rehearsal/presentation, and all operational approvals
+remain human responsibilities.
 
 ## Summary
-This capstone project is not just an AI demo. It is a structured operational decision-support concept for airline recovery planning, designed to combine specialist reasoning, policy guardrails, and human oversight into a practical AOG workflow.
+This capstone implementation combines specialist analysis, deterministic
+compliance and ranking, evidence traceability, and a mandatory human decision
+gate in a reproducible local AOG workflow. It remains advisory and does not
+execute operational actions.

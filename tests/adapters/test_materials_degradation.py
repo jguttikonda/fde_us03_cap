@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -14,6 +14,7 @@ from aog_recovery.materials_logistics.tools import (
     MaterialsReadRequest,
     MaterialsToolName,
     MaterialsToolResult,
+    read_inventory_with_cache_fallback,
 )
 
 TIMESTAMP = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
@@ -51,6 +52,44 @@ def materials_result(
         access_mode="read",
     )
     return source_adapter.read(request, AgentRole.MATERIALS_LOGISTICS)
+
+
+def inventory_request() -> MaterialsReadRequest:
+    return MaterialsReadRequest(
+        schema_version="1.0",
+        request_id="request-cache-001",
+        case_id="case-cache-001",
+        trace_context=TraceContext(trace_id="trace-cache-001", correlation_id="corr-cache-001"),
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        requested_at=TIMESTAMP,
+        part_number="P-110",
+        station="TEST-STATION-A",
+        quantity=1,
+        access_mode="read",
+    )
+
+
+def inventory_adapter(
+    source: str,
+    response_mode: MockResponseMode = MockResponseMode.SUCCESS,
+    retrieved_at: datetime = TIMESTAMP,
+) -> LocalMaterialsReadOnlyAdapter:
+    return LocalMaterialsReadOnlyAdapter(
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        source=source,
+        fixture_timestamp=TIMESTAMP,
+        fixture_evidence=(
+            Evidence(
+                evidence_id=f"{source}-evidence",
+                source=source,
+                retrieved_at=retrieved_at,
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="inventory-claim-cache-001",
+                content={"quantity": 3},
+            ),
+        ),
+        response_mode=response_mode,
+    )
 
 
 def test_stale_evidence_is_labeled_retained_and_lowers_confidence() -> None:
@@ -131,3 +170,98 @@ def test_repeated_timeout_is_idempotent_for_the_same_request() -> None:
 
     assert first == second
     assert first.request_id == second.request_id
+
+
+def test_current_inventory_does_not_query_cache() -> None:
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory"),
+        inventory_adapter("inventory-cache"),
+        inventory_request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+
+    assert len(results) == 1
+    assert results[0].status is ToolResultStatus.SUCCESS
+    assert results[0].source == "live-inventory"
+
+
+def test_unavailable_inventory_preserves_failure_and_labels_cached_evidence() -> None:
+    retrieval_time = TIMESTAMP - timedelta(days=1)
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory", MockResponseMode.UNAVAILABLE),
+        inventory_adapter("inventory-cache", retrieved_at=retrieval_time),
+        inventory_request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+    summary = summarize_materials_evidence(results, 0.82, AogSettings())
+    source_result, cached_result = results
+
+    assert source_result.status is ToolResultStatus.FAILED
+    assert source_result.error is not None
+    assert source_result.error.category == "source_unavailable"
+    assert cached_result.status is ToolResultStatus.PARTIAL
+    assert cached_result.error is None
+    assert cached_result.evidence is not None
+    assert cached_result.evidence[0].source == "inventory-cache"
+    assert cached_result.evidence[0].retrieved_at == retrieval_time
+    assert cached_result.evidence[0].validity_state is EvidenceValidity.STALE
+    assert cached_result.warnings[0].code == "CACHED_EVIDENCE"
+    assert summary.status is ToolResultStatus.PARTIAL
+    assert summary.confidence == 0.72
+    assert summary.errors == (source_result.error,)
+    assert summary.evidence_references == ("inventory-cache-evidence",)
+
+
+def test_unavailable_inventory_without_cache_remains_failed() -> None:
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory", MockResponseMode.UNAVAILABLE),
+        None,
+        inventory_request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+
+    assert len(results) == 1
+    assert results[0].status is ToolResultStatus.FAILED
+    assert results[0].error is not None
+    assert results[0].error.category == "source_unavailable"
+
+
+def test_timeout_can_use_cache_while_preserving_timeout_error() -> None:
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory", MockResponseMode.TIMEOUT),
+        inventory_adapter("inventory-cache"),
+        inventory_request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+
+    assert len(results) == 2
+    assert results[0].error is not None
+    assert results[0].error.category == "timeout"
+    assert results[1].status is ToolResultStatus.PARTIAL
+    assert results[1].warnings[0].code == "CACHED_EVIDENCE"
+
+
+def test_malformed_inventory_does_not_use_cache() -> None:
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory", MockResponseMode.MALFORMED),
+        inventory_adapter("inventory-cache"),
+        inventory_request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+
+    assert len(results) == 1
+    assert results[0].error is not None
+    assert results[0].error.category == "malformed_response"
+
+
+def test_denied_inventory_role_does_not_use_cache() -> None:
+    results = read_inventory_with_cache_fallback(
+        inventory_adapter("live-inventory"),
+        inventory_adapter("inventory-cache"),
+        inventory_request(),
+        AgentRole.OPERATIONS,
+    )
+
+    assert len(results) == 1
+    assert results[0].error is not None
+    assert results[0].error.category == "role_not_allowlisted"

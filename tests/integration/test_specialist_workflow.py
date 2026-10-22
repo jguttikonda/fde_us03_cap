@@ -6,7 +6,9 @@ from decimal import Decimal
 import pytest
 from pydantic import BaseModel
 
-from aog_recovery.contracts.agent import AgentResult, AgentResultStatus
+from aog_recovery.adapters.local import MockResponseMode
+from aog_recovery.config import AogSettings
+from aog_recovery.contracts.agent import AgentResult, AgentResultStatus, AgentRole
 from aog_recovery.contracts.case import AogCase, TraceContext
 from aog_recovery.contracts.evidence import Evidence, EvidenceValidity, EvidenceWarning
 from aog_recovery.contracts.tool import ToolResultStatus
@@ -52,6 +54,7 @@ from aog_recovery.materials_logistics.agent import (
     MaterialsPromptStage,
     MaterialsReasoningOutput,
 )
+from aog_recovery.materials_logistics.degradation import summarize_materials_evidence
 from aog_recovery.materials_logistics.models import (
     AuthorizationStatus,
     AvailabilityStatus,
@@ -66,6 +69,12 @@ from aog_recovery.materials_logistics.models import (
     SourcingOption,
     TraceabilityStatus,
 )
+from aog_recovery.materials_logistics.tools import (
+    LocalMaterialsReadOnlyAdapter,
+    MaterialsReadRequest,
+    MaterialsToolName,
+    read_inventory_with_cache_fallback,
+)
 from aog_recovery.observability.structured import LOGGER
 
 TIMESTAMP = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
@@ -75,6 +84,7 @@ class FakeMaintenanceRunner:
     def __init__(self, outputs: tuple[BaseModel, ...]) -> None:
         self.outputs = list(outputs)
         self.stages: list[MaintenancePromptStage] = []
+        self.payloads: list[Mapping[str, object]] = []
 
     async def run_stage(
         self,
@@ -82,6 +92,7 @@ class FakeMaintenanceRunner:
         payload: Mapping[str, object],
     ) -> BaseModel | Mapping[str, object]:
         self.stages.append(stage)
+        self.payloads.append(payload)
         return self.outputs.pop(0)
 
 
@@ -89,6 +100,7 @@ class FakeMaterialsRunner:
     def __init__(self, outputs: tuple[BaseModel, ...]) -> None:
         self.outputs = list(outputs)
         self.stages: list[MaterialsPromptStage] = []
+        self.payloads: list[Mapping[str, object]] = []
 
     async def run_stage(
         self,
@@ -96,6 +108,7 @@ class FakeMaterialsRunner:
         payload: Mapping[str, object],
     ) -> BaseModel | Mapping[str, object]:
         self.stages.append(stage)
+        self.payloads.append(payload)
         return self.outputs.pop(0)
 
 
@@ -260,6 +273,7 @@ def maintenance_runner_outputs(
 def materials_input(
     *,
     stale: bool = False,
+    evidence_summary: MaterialsEvidenceSummary | None = None,
 ) -> MaterialsLogisticsAssessmentInput:
     validity = EvidenceValidity.STALE if stale else EvidenceValidity.CURRENT
     warning = (
@@ -335,7 +349,7 @@ def materials_input(
         assumptions=(),
         missing_data=(),
     )
-    summary = MaterialsEvidenceSummary(
+    summary = evidence_summary or MaterialsEvidenceSummary(
         status=ToolResultStatus.PARTIAL if stale else ToolResultStatus.SUCCESS,
         confidence=0.72 if stale else 0.82,
         evidence_references=(
@@ -387,6 +401,7 @@ def materials_runner_outputs(
 async def run_integrated_scenario(
     *,
     stale: bool = False,
+    materials_evidence_summary: MaterialsEvidenceSummary | None = None,
     recorder: InMemoryCaseContextRecorder | None = None,
 ) -> tuple[AgentResult, AgentResult, CoordinatedPeerExchange]:
     maintenance_data = maintenance_input()
@@ -398,7 +413,7 @@ async def run_integrated_scenario(
         json.dumps(maintenance_result.role_payload)
     )
 
-    materials_data = materials_input(stale=stale)
+    materials_data = materials_input(stale=stale, evidence_summary=materials_evidence_summary)
     materials_runner = FakeMaterialsRunner(materials_runner_outputs(materials_data))
     materials_result = await MaterialsLogisticsAgent(materials_runner).assess(
         materials_data.model_dump(mode="python")
@@ -479,3 +494,70 @@ async def test_stale_materials_evidence_reaches_integrated_h4_without_approval()
     assert coordinated.exchange.response.confidence == 0.72
     assert coordinated.exchange.response.warnings[0].code == "STALE_EVIDENCE"
     assert coordinated.recording.status is ExchangeRecordingStatus.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_cached_inventory_failure_reaches_materials_h4_and_correlated_exchange() -> None:
+    case = make_case()
+    request = MaterialsReadRequest(
+        schema_version="1.0",
+        request_id="cached-inventory-request",
+        case_id=case.case_id,
+        trace_context=case.trace_context,
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        requested_at=TIMESTAMP,
+        part_number="P-120",
+        station="TEST-STATION-A",
+        quantity=1,
+        access_mode="read",
+    )
+    unavailable_adapter = LocalMaterialsReadOnlyAdapter(
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        source="synthetic-live-inventory",
+        fixture_timestamp=TIMESTAMP,
+        fixture_evidence=(),
+        response_mode=MockResponseMode.UNAVAILABLE,
+    )
+    cache_adapter = LocalMaterialsReadOnlyAdapter(
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        source="synthetic-inventory-cache",
+        fixture_timestamp=TIMESTAMP,
+        fixture_evidence=(
+            Evidence(
+                evidence_id="cached-P120-inventory",
+                source="synthetic-inventory-cache",
+                retrieved_at=TIMESTAMP - timedelta(days=1),
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="inventory-claim-P120",
+                content={"available_quantity": 4},
+            ),
+        ),
+    )
+    source_results = read_inventory_with_cache_fallback(
+        unavailable_adapter,
+        cache_adapter,
+        request,
+        caller_role=AgentRole.MATERIALS_LOGISTICS,
+    )
+    summary = summarize_materials_evidence(source_results, 0.82, AogSettings())
+    recorder = InMemoryCaseContextRecorder()
+
+    maintenance, materials, coordinated = await run_integrated_scenario(
+        materials_evidence_summary=summary,
+        recorder=recorder,
+    )
+
+    payload = MaterialsLogisticsAgentPayload.model_validate_json(json.dumps(materials.role_payload))
+    assert maintenance.status is AgentResultStatus.COMPLETE
+    assert materials.status is AgentResultStatus.PARTIAL
+    assert materials.confidence == 0.72
+    assert payload.evidence_summary.errors[0].category == "source_unavailable"
+    assert payload.evidence_summary.warnings[0].code == "CACHED_EVIDENCE"
+    assert coordinated.exchange.response.status is ExchangeStatus.PARTIAL
+    assert coordinated.exchange.response.confidence == 0.72
+    assert coordinated.exchange.response.errors[0].category == "source_unavailable"
+    assert coordinated.exchange.response.warnings[0].code == "CACHED_EVIDENCE"
+    assert coordinated.recording.status is ExchangeRecordingStatus.COMPLETE
+    assert recorder.records
+    assert all(record.trace_context == case.trace_context for record in recorder.records)
+    assert recorder.records[-1].message == coordinated.exchange.response

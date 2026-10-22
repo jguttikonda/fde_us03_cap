@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.adk.tools.function_tool import FunctionTool
@@ -17,6 +18,8 @@ from aog_recovery.materials_logistics.tools import (
     LocalMaterialsReadOnlyAdapter,
     MaterialsReadRequest,
     MaterialsToolName,
+    MaterialsToolReadEnvelope,
+    build_materials_adk_tool,
     build_materials_adk_tools,
     build_materials_mcp_toolset,
 )
@@ -135,6 +138,72 @@ def test_materials_adapter_failure_is_not_success_shaped() -> None:
     assert result.evidence is None
     assert result.error is not None
     assert result.error.category == "source_unavailable"
+
+
+def test_adk_inventory_tool_routes_unavailable_reads_through_cache_fallback() -> None:
+    live_adapter = adapter(response_mode=MockResponseMode.UNAVAILABLE)
+    cache_adapter = LocalMaterialsReadOnlyAdapter(
+        tool_name=MaterialsToolName.PART_INVENTORY,
+        source="synthetic-inventory-cache",
+        fixture_timestamp=TIMESTAMP,
+        fixture_evidence=(
+            evidence().model_copy(
+                update={
+                    "source": "synthetic-inventory-cache",
+                    "retrieved_at": TIMESTAMP - timedelta(days=1),
+                }
+            ),
+        ),
+    )
+    adk_tool = build_materials_adk_tools(
+        {MaterialsToolName.PART_INVENTORY: live_adapter},
+        AgentRole.MATERIALS_LOGISTICS,
+        inventory_cache_adapter=cache_adapter,
+    )[0]
+
+    result_payload = adk_tool.func(request().model_dump(mode="json"))
+    envelope = MaterialsToolReadEnvelope.model_validate_json(json.dumps(result_payload))
+
+    assert len(envelope.results) == 2
+    primary, cached = envelope.results
+    assert primary.status is ToolResultStatus.FAILED
+    assert primary.error is not None
+    assert primary.error.category == "source_unavailable"
+    assert cached.status is ToolResultStatus.PARTIAL
+    assert cached.evidence is not None
+    assert cached.evidence[0].source == "synthetic-inventory-cache"
+    assert cached.evidence[0].retrieved_at == TIMESTAMP - timedelta(days=1)
+    assert cached.evidence[0].validity_state is EvidenceValidity.STALE
+    assert cached.warnings[0].code == "CACHED_EVIDENCE"
+    assert all(item.trace_context == request().trace_context for item in envelope.results)
+
+
+def test_adk_inventory_tool_does_not_fallback_on_malformed_response() -> None:
+    adk_tool = build_materials_adk_tool(
+        adapter(response_mode=MockResponseMode.MALFORMED),
+        AgentRole.MATERIALS_LOGISTICS,
+        cache_adapter=adapter(),
+    )
+
+    result_payload = adk_tool.func(request().model_dump(mode="json"))
+    envelope = MaterialsToolReadEnvelope.model_validate_json(json.dumps(result_payload))
+
+    assert len(envelope.results) == 1
+    result = envelope.results[0]
+    assert result.status is ToolResultStatus.FAILED
+    assert result.error is not None
+    assert result.error.category == "malformed_response"
+
+
+def test_cache_envelope_rejects_success_shaped_fallback() -> None:
+    primary = adapter(response_mode=MockResponseMode.UNAVAILABLE).read(
+        request(),
+        AgentRole.MATERIALS_LOGISTICS,
+    )
+    cache_success = adapter().read(request(), AgentRole.MATERIALS_LOGISTICS)
+
+    with pytest.raises(ValidationError, match="degraded cache read"):
+        MaterialsToolReadEnvelope(schema_version="1.0", results=(primary, cache_success))
 
 
 def test_adk_and_mcp_tools_are_limited_to_the_callers_allowlist() -> None:

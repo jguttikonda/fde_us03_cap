@@ -15,7 +15,7 @@
 
 | Check | Command | Result |
 |---|---|---|
-| Contract, validation, adapter, settings, audit, fixture, and integration tests | `uv run pytest` | 74 passed |
+| Historical shared-foundation contract, validation, adapter, settings, audit, fixture, and integration tests | `uv run pytest` | 74 passed at the original foundation verification |
 | Lint | `uv run ruff check .` | All checks passed |
 | Formatting | `uv run ruff format --check .` | 89 files already formatted |
 | Type checking | `uv run mypy src` | Success, no issues in 23 source files |
@@ -23,6 +23,9 @@
 The test data is synthetic and deterministic. These results validate local
 contracts and mocks only; they do not represent live enterprise connectivity,
 airworthiness approval, operational execution, sponsor approval, or Go/No-Go.
+The 74-test result is a historical foundation baseline, not the current
+repository-wide total. Current Controller runtime and suite evidence is kept in
+[controller-orchestration-verification.md](controller-orchestration-verification.md).
 
 ## Requirement-to-Model-to-Test Traceability
 
@@ -35,7 +38,11 @@ airworthiness approval, operational execution, sponsor approval, or Go/No-Go.
 | ARD-SYS-007..009, ARD-SEC-001..004, ARD-RES-001..007, ARD-NFR-003/005 | `adapters/protocols.py`, `adapters/local.py`: role allowlist, read-only interface, deterministic degraded modes | `tests/adapters/test_local_adapter.py`; `tests/integration/test_shared_foundation_scenarios.py` |
 | ARD-TEC-004, ARD-SEC-006..007, ARD-NFR-001/006 | `config.py`: typed local adapter mode, bounded timeouts, ordered thresholds, secret exclusion | `tests/settings/test_settings.py` |
 | ARD-DAT-003, ARD-OBS-001..003 | `observability/context.py`, `observability/structured.py`, `adk/context.py`: case/trace/request propagation and structured events | Adapter correlation assertions in `tests/adapters/test_local_adapter.py`; event shape in `tests/contracts/test_tool_decision_audit_contract.py` |
-| ARD-TST-001..003/005, ARD-RUB-001..004 | Shared synthetic fixtures and integrated foundation scenario | `tests/conftest.py`, `tests/test_synthetic_fixtures.py`, all test files listed above; full result: 74 passed |
+| ARD-TST-001..003/005/007..009, ARD-PRN-001..008, ARD-CTL-006..008/017..018, ARD-OBS-001..004 | Shared synthetic fixtures and integrated foundation scenario | `tests/conftest.py`, `tests/test_synthetic_fixtures.py`, and shared-foundation tests; historical full result: 74 passed |
+
+Controller runtime requirements and lifecycle events are maintained in one
+current section in
+[controller-orchestration-verification.md](controller-orchestration-verification.md).
 
 ## AI-Assisted Iteration Evidence
 

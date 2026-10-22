@@ -22,7 +22,9 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_adk_agent_carries_prompts_and_one_read_only_tool(no_network: None) -> None:
     scenario = scenario_normal_repair()
     agent = build_operations_adk_agent(
-        OperationsAgent(scenario.adapters), OperationsSettings(adk_model="test-model")
+        OperationsAgent(scenario.adapters),
+        OperationsSettings(adk_model="test-model"),
+        require_model_credential=False,
     )
     assert type(agent).__name__ == "LlmAgent"
     assert agent.name == "operations_agent"
@@ -38,7 +40,10 @@ def test_adk_tool_runs_the_deterministic_assessment_and_rejects_bad_input(
     no_network: None,
 ) -> None:
     scenario = scenario_normal_repair()
-    agent = build_operations_adk_agent(OperationsAgent(scenario.adapters))
+    agent = build_operations_adk_agent(
+        OperationsAgent(scenario.adapters),
+        require_model_credential=False,
+    )
     tool = agent.tools[0]
     assert callable(tool)
     good = tool(scenario.request.model_dump())
@@ -47,6 +52,48 @@ def test_adk_tool_runs_the_deterministic_assessment_and_rejects_bad_input(
     bad = tool({"schema_version": "9"})
     assert bad["status"] == "invalid_request"
     assert bad["findings"]["is_valid"] is False
+
+
+@pytest.mark.parametrize("credential", (None, "YOUR-VOCAREUM-KEY-HERE"))
+def test_model_backed_adk_startup_rejects_missing_or_placeholder_credential(
+    credential: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if credential is None:
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("GEMINI_API_KEY", credential)
+    settings = OperationsSettings(_env_file=None)
+
+    with pytest.raises(ValueError, match="GEMINI_API_KEY") as error:
+        build_operations_adk_agent(
+            OperationsAgent(scenario_normal_repair().adapters),
+            settings,
+            require_model_credential=True,
+        )
+
+    assert "YOUR-VOCAREUM-KEY-HERE" not in str(error.value)
+
+
+def test_configured_model_credential_is_secret_typed_and_excluded_from_output(
+    monkeypatch: pytest.MonkeyPatch,
+    no_network: None,
+) -> None:
+    secret = "synthetic-model-key-not-real"
+    monkeypatch.setenv("GEMINI_API_KEY", secret)
+    settings = OperationsSettings(_env_file=None)
+
+    settings.require_model_credential()
+    agent = build_operations_adk_agent(
+        OperationsAgent(scenario_normal_repair().adapters),
+        settings,
+        require_model_credential=True,
+    )
+
+    assert settings.gemini_api_key is not None
+    assert agent.model == settings.adk_model
+    assert secret not in repr(settings)
+    assert secret not in settings.model_dump_json()
 
 
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
