@@ -119,6 +119,31 @@ logic with local synthetic Operations adapters. It makes no model or network cal
 reports no operational action. Focused evidence: `tests/integration/test_controller_demo.py`
 (`uv run pytest tests/integration/test_controller_demo.py -q`: 10 passed).
 
+## Controller ADK Web Demo Evidence
+
+The local Web root is `adk_agents/controller_agent/agent.py`; its scenario-only tool is built
+by `controller/demo_adk_agent.py` and returns the existing `ControllerAdkResponse`. Launch
+from the repository root with `uv run --env-file .env adk web adk_agents/controller_agent`.
+The Web server is unauthenticated and intended for loopback/local development only. It requires
+a non-placeholder `GEMINI_API_KEY`; the preflight does not verify provider-side authenticity.
+The model handles the presenter's prompt and synthetic tool response; no live airline,
+supplier, identity, schedule, or operational data is loaded, and no write tool is exposed.
+
+| Scenario or boundary | ARD coverage | Requirement-to-test mapping |
+|---|---|---|
+| `happy_path`: evidence-backed repair result remains typed and pending human approval | ARD-CTL-013..016, ARD-GOV-006..008, ARD-TST-006/009 | `tests/integration/test_controller_demo_adk.py::test_adk_demo_scenarios_are_repeatable_offline_and_advisory` |
+| `cache_degraded`: primary inventory failure, stale evidence, and degraded confidence remain visible | ARD-RES-001/006, ARD-GOV-004..005, ARD-TST-003/006/009 | `tests/integration/test_controller_demo_adk.py::test_adk_demo_scenarios_are_repeatable_offline_and_advisory` |
+| `time_conflict`: 3h/7h source estimates remain visible and approval is deferred | ARD-GOV-004..005, ARD-TST-006/009 | `tests/integration/test_controller_demo_adk.py::test_adk_demo_scenarios_are_repeatable_offline_and_advisory` |
+| `close_score_choice`: both options remain in the inclusive selection group for human choice | ARD-CTL-015..016, ARD-GOV-006..008, ARD-TST-004..006 | `tests/integration/test_controller_demo_adk.py::test_adk_demo_scenarios_are_repeatable_offline_and_advisory` |
+| Unknown names fail structurally without echoing input or fabricating a report | ARD-DAT-008..010, ARD-RES-006, ARD-SEC-006 | `tests/integration/test_controller_demo_adk.py::test_unknown_scenario_returns_typed_failure_without_echoing_input` |
+| Missing/template credential is rejected and key material is redacted; only the scenario tool is available | ARD-TEC-002/005, ARD-DEP-001..002, ARD-SEC-001..003/006, ARD-GOV-008 | `tests/integration/test_controller_demo_adk.py::test_controller_adk_web_root_constructs_with_local_credential`; `test_controller_demo_adk_startup_rejects_missing_or_placeholder_credential`; `test_controller_demo_adk_agent_has_only_typed_scenario_tool` |
+
+The ADK tests invoke the tool directly, not the model, and block socket connections. Current
+focused evidence is 9 ADK boundary tests; the complete demo/workflow plus ADK slice has 27
+passing tests. All scenarios keep the human gate pending and expose no operational action.
+The model-backed conversation, provider authentication, external reachability, qualified
+review, sponsor rehearsal, Go/No-Go, and operational approval remain unverified or pending.
+
 ## Security Scan Evidence
 
 Environment: Windows, Python 3.14.7, uv 0.12.21. Bandit 1.9.4 and pip-audit

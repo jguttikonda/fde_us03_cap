@@ -16,7 +16,7 @@ This record consolidates the current implementation, test, environment, and secu
 | Environment and backout | ARD-DEP-001..005, ARD-SEC-006, ARD-NFR-005..007; Rubric Category 3 | [README.md](../README.md) documents Python/uv setup, optional model configuration, secret handling, offline smoke/readiness commands, mock/live limits, and no-service health boundary. Whole-workflow backout is in [rapid-peer-review.md](rapid-peer-review.md) and [go-no-go-checklist.md](go-no-go-checklist.md). | Fresh temporary environment setup and documented commands were run. No production deployment or live adapter health has been verified. |
 | RAPID decision controls | ARD-TEC-019..020, ARD-RUB-005..009; Rubric Category 4 | [rapid-peer-review.md](rapid-peer-review.md) and [go-no-go-checklist.md](go-no-go-checklist.md) include modified-file inventory, test/security evidence, known issues, and backout steps | Drafts are evidence only. Author/reviewer identities, review findings, conclusions, owners, and Go/No-Go outcome are pending for humans. |
 | AI-assisted development practice | ARD-TEC-020, ARD-RUB-008..009; Rubric Category 5 | Project guidance in `AGENTS.md` and `.github/copilot-instructions.md`; OpenSpec proposal/design/task evolution and implementation corrections remain inspectable in repository history | Do not fabricate human redirection. The team must identify and explain any required accepted/rejected/redirected AI output during review. |
-| Sponsor demonstration and communication | ARD-DEP-006, ARD-RUB-010..011; Rubric Category 6 | Offline Controller demo at `src/aog_recovery/controller/demo.py`, ten-minute [sponsor runbook](capstone-demo-runbook.md), and existing Operations demo at `src/aog_recovery/operations/demo.py` | Four Controller scenarios are implemented and focused-tested. Rehearsal, live Q&A, sponsor presentation, and acceptance remain pending. |
+| Sponsor demonstration and communication | ARD-DEP-006, ARD-RUB-010..011; Rubric Category 6 | Offline Controller CLI and local ADK Web root at `adk_agents/controller_agent/agent.py`; `happy_path`, `cache_degraded`, `time_conflict`, and `close_score_choice` plus boundary tests are mapped in [Controller verification](controller-orchestration-verification.md); ten-minute [sponsor runbook](capstone-demo-runbook.md) | Four synthetic scenarios are exercised through the deterministic Controller and ADK tool boundary. Web startup rejects missing/template keys, but provider authentication is not tested; no live enterprise data or writes are used. Rehearsal, live Q&A, sponsor presentation, and acceptance remain pending. |
 
 ## Implementation and Test Map
 
@@ -26,6 +26,7 @@ This record consolidates the current implementation, test, environment, and secu
 | Model-backed Operations startup rejects missing/example credentials before serving without exposing values | `operations/settings.py` (`SecretStr`, preflight), `operations/adk_agent.py`, `adk_agents/operations_agent/agent.py` | `tests/operations/test_ops_adk_and_demo.py::test_model_backed_adk_startup_rejects_missing_or_placeholder_credential`; `test_configured_model_credential_is_secret_typed_and_excluded_from_output` |
 | Cached warning and source failure reach Controller report and correlated H4 audit | `controller/aggregation.py`, `controller/orchestration.py`, `coordination/workflow.py` | `tests/integration/test_controller_workflow.py::test_cached_inventory_failure_reaches_controller_report_and_correlated_audit` |
 | Functional cases, conflict/degraded failures, and human choice remain visible at Controller boundary | `controller/compliance.py`, `controller/recommendation.py`, `controller/ranking.py` | Controller case mappings and tests in [controller-orchestration-verification.md](controller-orchestration-verification.md) |
+| Controller ADK Web runs only named synthetic scenarios, preserves the typed report, rejects unknown names, and keeps approval pending | `adk_agents/controller_agent/agent.py`, `controller/demo_adk_agent.py`, `controller/demo_workflow.py` | `tests/integration/test_controller_demo_adk.py`: direct tool calls for all four scenarios with blocked socket connections; typed failures, credential rejection/redaction, evidence, conflicts, close-score grouping, and pending human gate |
 | Least-privilege, audit correlation/redaction, and human-gate enforcement | Read-only typed adapters, `controller/context.py`, shared audit serializer, `validation/human_gate.py` | Security, audit, and human-gate mappings in [controller-orchestration-verification.md](controller-orchestration-verification.md) |
 
 ## Verification Snapshot
@@ -50,13 +51,48 @@ Environment: Windows, Python 3.14.7, uv 0.12.21. Setup and README commands were 
 
 Pytest warnings are from Google GenAI's deprecated `_UnionGenericAlias` and Google ADK's experimental `PLUGGABLE_AUTH` feature. This completes automated verification only; it is not a human review, Go/No-Go, sponsor acceptance, or operational approval.
 
+## Controller ADK Web Change Supplement
+
+This supplement records verification for `expose-controller-mock-demo-via-adk-web`; it does not
+replace or retroactively alter the archived readiness-change snapshot above.
+
+| Check | Command | Result |
+|---|---|---|
+| ADK boundary | `uv run pytest tests/integration/test_controller_demo_adk.py -q` | 9 passed; each named scenario is invoked directly with socket connections blocked. |
+| Demo and ADK integration | `uv run pytest tests/integration/test_controller_demo.py tests/integration/test_controller_demo_adk.py -q` | 27 passed. |
+| Full suite and coverage | `uv run pytest --cov=aog_recovery --cov-report=term` | 505 passed; 93% total coverage. |
+| Ruff lint | `uv run ruff check .` | All checks passed. |
+| Ruff format | `uv run ruff format --check .` | 229 files already formatted. |
+| Types | `uv run mypy src` | Success; no issues in 70 source files. |
+| OpenSpec | `openspec validate --changes "expose-controller-mock-demo-via-adk-web" --strict` | Valid; no issues. |
+| Bandit 1.9.4 | `uv run bandit -r src -ll` | No medium/high findings across 10,572 lines; 7 low-severity notices remain. |
+| pip-audit 2.10.1 | Locked requirements export followed by `uv run pip-audit --skip-editable -r "$env:TEMP\fde-us03-cap-controller-web-requirements.txt"` | No known vulnerabilities. |
+| Gitleaks 8.30.1 | Redacted `dir` scans of `src`, `adk_agents`, `tests`, `docs`, `openspec`, `.github`, `incidents`, `.env.example`, `README.md`, and `pyproject.toml` | No leaks found in the scanned project-owned paths. |
+
+The full test run reported two dependency warnings: the Google GenAI `_UnionGenericAlias`
+deprecation and Google ADK experimental `PLUGGABLE_AUTH` warning. The Controller Web root's
+tool tests use synthetic credentials and make no provider call; no provider-side key check was
+performed. Qualified peer/InfoSec/Reference Architecture review, team Go/No-Go, sponsor rehearsal,
+and all operational approvals remain human responsibilities.
+
+Current-change inventory: `src/aog_recovery/controller/demo.py`,
+`src/aog_recovery/controller/demo_workflow.py`,
+`src/aog_recovery/controller/demo_adk_agent.py`,
+`adk_agents/controller_agent/__init__.py`, `adk_agents/controller_agent/agent.py`,
+`tests/integration/test_controller_demo.py`,
+`tests/integration/test_controller_demo_adk.py`, `README.md`,
+`docs/capstone-demo-runbook.md`, `docs/controller-orchestration-verification.md`,
+`docs/aog-recovery-readiness-verification.md`, `docs/go-no-go-checklist.md`,
+`docs/capstone_rubric_phase_checklist.md`, and
+`openspec/changes/expose-controller-mock-demo-via-adk-web/`.
+
 ## Security Checks and Limitations
 
 - Bandit 1.9.4: `uv run bandit -r src -ll` found no medium/high issues across 9,620 lines. `uv run bandit -r src -l` reported seven low `B101` assertion-use notices; locations and rationale are retained in [controller-orchestration-verification.md](controller-orchestration-verification.md), and remain open for reviewer assessment.
 - pip-audit 2.10.1: a requirements export from `uv.lock` excluding the local editable project was audited with `uv run pip-audit --skip-editable -r "$env:TEMP\fde-us03-cap-dependencies.txt"`; no known third-party dependency vulnerabilities were found. pip-audit did not recognize `uv.lock` directly, so the lock export is the audited input.
 - Gitleaks 8.30.1: separate project-owned directory/root-file scans found no leaks. The broad `gitleaks dir . --redact --no-banner` run reported 250 matches only in ignored `.venv` dependency sources (247 generic-key and 3 private-key rule matches). `gitleaks git . --log-opts="--no-textconv" --redact --no-banner` scanned 39 commits and found no leaks.
 - Gitleaks does not inspect binary DOCX/PDF contents. That limitation remains a manual review item; Git textconv was disabled for history scanning to avoid the unavailable `docx2txt` helper.
-- The credential preflight rejects absent and example-placeholder `GEMINI_API_KEY` values before constructing the model-backed Operations agent. It cannot verify whether a non-placeholder value is accepted by the provider without an authorized request.
+- The Operations and Controller ADK credential preflights reject absent and example-placeholder `GEMINI_API_KEY` values before constructing their model-backed agents. They cannot verify whether a non-placeholder value is accepted by the provider without an authorized request.
 - All test fixtures and adapters are synthetic/local. These scans do not establish live enterprise service health, production security posture, airworthiness, or operational readiness.
 
 ## Deferred Human Activities

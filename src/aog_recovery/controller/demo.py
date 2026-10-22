@@ -108,6 +108,56 @@ def _evidence_bundle(*, cached: bool, time_conflict: bool) -> tuple[Evidence, ..
             content={"manifest": "synthetic"},
         ),
     ]
+    evidence.extend(
+        (
+            Evidence(
+                evidence_id="engineering-preference-P120",
+                source="synthetic-engineering-notes",
+                retrieved_at=DEMO_TIME,
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="preferred-replacement-P120",
+                content={"preferred_part_number": "P-120"},
+            ),
+            Evidence(
+                evidence_id="need-by-P120",
+                source="synthetic-maintenance-plan",
+                retrieved_at=DEMO_TIME,
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="need-by-P120",
+                content={"need_by": (DEMO_TIME + timedelta(hours=8)).isoformat()},
+            ),
+            Evidence(
+                evidence_id="parts-ready-P120",
+                source="synthetic-materials-plan",
+                retrieved_at=DEMO_TIME,
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="parts-ready-P120",
+                content={"parts_ready_at": DEMO_TIME.isoformat()},
+            ),
+            Evidence(
+                evidence_id="quote-P120",
+                source="synthetic-sourcing-quote",
+                retrieved_at=DEMO_TIME,
+                validity_state=EvidenceValidity.CURRENT,
+                claim_reference="quote-P120",
+                content={"estimated_cost_usd": "100.00", "lead_time_hours": 2},
+            ),
+            *tuple(
+                Evidence(
+                    evidence_id=f"maintenance-history-P110-{index}",
+                    source="synthetic-maintenance-history",
+                    retrieved_at=DEMO_TIME,
+                    validity_state=EvidenceValidity.CURRENT,
+                    claim_reference=f"maintenance-history-P110-{index}",
+                    content={
+                        "part_number": "P-110",
+                        "occurred_at": (DEMO_TIME - timedelta(days=days)).isoformat(),
+                    },
+                )
+                for index, days in enumerate((89, 45, 0), start=1)
+            ),
+        )
+    )
     if cached:
         evidence.append(
             Evidence(
@@ -115,6 +165,17 @@ def _evidence_bundle(*, cached: bool, time_conflict: bool) -> tuple[Evidence, ..
                 source="synthetic-inventory-cache",
                 retrieved_at=DEMO_TIME - timedelta(days=1),
                 validity_state=EvidenceValidity.STALE,
+                claim_reference="inventory-availability-p120",
+                content={"available_quantity": 1},
+            )
+        )
+    else:
+        evidence.append(
+            Evidence(
+                evidence_id="inventory-live-p120",
+                source="synthetic-inventory",
+                retrieved_at=DEMO_TIME,
+                validity_state=EvidenceValidity.CURRENT,
                 claim_reference="inventory-availability-p120",
                 content={"available_quantity": 1},
             )
@@ -141,6 +202,60 @@ def _evidence_bundle(*, cached: bool, time_conflict: bool) -> tuple[Evidence, ..
             )
         )
     return tuple(evidence)
+
+
+def build_demo_intake(scenario: DemoScenario) -> ControllerIntake:
+    """Build deterministic, typed Controller intake for one named synthetic scenario."""
+    case = default_case()
+    cached = scenario is DemoScenario.CACHE_DEGRADED
+    time_conflict = scenario is DemoScenario.TIME_CONFLICT
+    evidence = _evidence_bundle(cached=cached, time_conflict=time_conflict)
+    evidence_references = tuple(item.evidence_id for item in evidence)
+    source_keys = (
+        ("demo-close-p120-a", "demo-close-p120-b")
+        if scenario is DemoScenario.CLOSE_SCORE
+        else (f"demo-{scenario.value}-p120",)
+    )
+    candidate_sources = tuple(
+        CandidateSource(
+            source_key=source_key,
+            kind=OptionKind.REPAIR_ALTERNATE,
+            failed_part_number="P-110",
+            source_evidence_references=evidence_references,
+            readiness=ReadinessEstimate(
+                source_agent=AgentRole.MAINTENANCE,
+                eta=DEMO_TIME,
+                basis=EtaBasis.CONFIRMED,
+                evidence_references=("eta-evidence-001",),
+            ),
+            sourcing_options=(
+                SourcingOption(
+                    part_number="P-120",
+                    source="synthetic-station",
+                    source_location="TEST-STATION-B",
+                    method=SourcingMethod.INTERNAL_TRANSFER,
+                    shipping_provider=None,
+                    shipping_service=None,
+                    transfer_required=True,
+                    lead_time_hours=2.0,
+                    eta_at=DEMO_TIME,
+                    estimated_cost_usd=Decimal("100.00"),
+                    quote_unavailable_reason=None,
+                    evidence_references=("part-eligibility-001",),
+                ),
+            ),
+            package_load=PackageLoadData(groups=()),
+            package_load_evidence_references=("load-evidence-001",),
+        )
+        for source_key in source_keys
+    )
+    return ControllerIntake(
+        schema_version="1.0",
+        case=case,
+        evidence=evidence,
+        affected_flight_numbers=("FX103",),
+        candidate_sources=candidate_sources,
+    )
 
 
 def _candidate_result(

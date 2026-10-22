@@ -3,8 +3,15 @@ import socket
 
 import pytest
 
-from aog_recovery.controller.demo import DEMO_SCENARIOS, main, run_demo_scenario
-from aog_recovery.controller.models import RecommendationStatus
+from aog_recovery.controller.demo import (
+    DEMO_SCENARIOS,
+    build_demo_intake,
+    main,
+    run_demo_scenario,
+)
+from aog_recovery.controller.demo_workflow import run_controller_demo_workflow
+from aog_recovery.controller.models import ControllerIntake, RecommendationStatus
+from aog_recovery.coordination.recording import ExchangeRecordingStatus
 from aog_recovery.operations.models import OptionKind
 from aog_recovery.validation.human_gate import HumanGateStatus
 
@@ -27,6 +34,83 @@ def test_demo_scenarios_are_repeatable_offline_and_advisory(
     assert first.advisory_only is True
     assert first.operational_actions == ()
     assert first.report.human_gate.status is HumanGateStatus.PENDING
+
+
+@pytest.mark.parametrize("scenario", DEMO_SCENARIOS)
+def test_demo_intakes_are_typed_repeatable_and_provenance_complete(scenario) -> None:
+    first = build_demo_intake(scenario)
+    second = build_demo_intake(scenario)
+
+    assert isinstance(first, ControllerIntake)
+    assert first == second
+    evidence_ids = {item.evidence_id for item in first.evidence}
+    assert all(
+        set(candidate.source_evidence_references).issubset(evidence_ids)
+        for candidate in first.candidate_sources
+    )
+    if scenario.value == "cache_degraded":
+        assert any(item.validity_state.value == "stale" for item in first.evidence)
+    if scenario.value == "time_conflict":
+        estimates = [
+            item.content.get("estimate_hours")
+            for item in first.evidence
+            if item.claim_reference == "recovery-time-estimate"
+        ]
+        assert estimates == [3, 7]
+    if scenario.value == "close_score_choice":
+        assert len(first.candidate_sources) == 2
+        assert len({item.source_key for item in first.candidate_sources}) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", DEMO_SCENARIOS)
+async def test_full_controller_workflow_demo_scenarios_are_repeatable_and_offline(
+    scenario,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def deny_network(*args: object, **kwargs: object) -> None:
+        raise AssertionError("network access attempted")
+
+    monkeypatch.setattr(socket.socket, "connect", deny_network)
+
+    first = await run_controller_demo_workflow(scenario)
+    second = await run_controller_demo_workflow(scenario)
+
+    assert first == second
+    assert first.handoff is not None
+    assert first.recommendation is not None
+    assert first.recommendation.human_gate.status is HumanGateStatus.PENDING
+    assert first.recommendation.trace_context == first.handoff.case.trace_context
+    assert all(
+        candidate.result.peer_exchange_recording is not None
+        for candidate in first.handoff.candidates
+    )
+    assert all(
+        candidate.result.peer_exchange_recording.status is ExchangeRecordingStatus.COMPLETE
+        for candidate in first.handoff.candidates
+        if candidate.result.peer_exchange_recording is not None
+    )
+
+    if scenario.value == "happy_path":
+        assert first.recommendation.ranked_options
+        assert not first.recommendation.errors
+    elif scenario.value == "cache_degraded":
+        assert any(error.category == "source_unavailable" for error in first.recommendation.errors)
+        assert any(warning.code == "CACHED_EVIDENCE" for warning in first.recommendation.warnings)
+        assert first.recommendation.confidence.confidence <= 0.49
+    elif scenario.value == "time_conflict":
+        assert first.recommendation.conflicts
+        assert first.recommendation.status is RecommendationStatus.REQUIRES_ESCALATION
+        assert any(
+            warning.code == "CONFLICTING_EVIDENCE" for warning in first.recommendation.warnings
+        )
+    elif scenario.value == "close_score_choice":
+        assert first.recommendation.requires_human_selection
+        assert len(first.recommendation.ranked_options) == 2
+        assert tuple(option.selection_group for option in first.recommendation.ranked_options) == (
+            1,
+            1,
+        )
 
 
 def test_happy_path_demo_has_source_backed_advisory_repair() -> None:

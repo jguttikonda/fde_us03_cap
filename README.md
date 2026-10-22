@@ -123,6 +123,24 @@ entry point fails fast when the key is absent or still the example placeholder.
 This local check does not contact the provider; a non-placeholder key's
 authenticity remains unverified until an authorized model-backed request.
 
+#### Controller ADK Web demo
+
+The Controller ADK Web root exposes only the four named synthetic scenarios.
+After configuring a non-placeholder `GEMINI_API_KEY` in the ignored `.env` file,
+launch it from the repository root with:
+
+```powershell
+uv run --env-file .env adk web adk_agents/controller_agent
+```
+
+The browser conversation uses the model provider to interpret the request and
+explain the result. The selected case, specialist findings, evidence, and
+Operations data are fixed synthetic values; no live enterprise records or
+operational writes are available. Startup rejects a missing or template key;
+this local check does not validate the key with the provider. ADK Web is an
+unauthenticated local development server; keep its
+default loopback binding and do not expose it to an untrusted network.
+
 To load the optional model configuration for a command:
 
 ```powershell
@@ -136,14 +154,16 @@ terminals after changing local environment configuration.
 ### Startup and local readiness
 
 There is no always-on Controller web service or HTTP health endpoint in this
-capstone implementation. Run the Operations synthetic smoke demo with
+capstone implementation. A local ADK Web demonstration is available under
+`adk_agents/controller_agent`; it is not a deployed or authenticated service.
+Run the Operations synthetic smoke demo with
 `uv run python -m aog_recovery.operations.demo`; it uses deterministic local
 adapters and makes no model, network, or operational calls. The configuration
 check and `uv run pytest` above are the local readiness checks. They verify the
 environment and mock workflows only; they do not prove live enterprise
 connectivity, production deployment readiness, airworthiness, or operational
 approval. The optional ADK web entry point under `adk_agents/operations_agent`
-is an Operations-only demonstration, not a deployed Controller service.
+remains an Operations-only demonstration.
 
 VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace

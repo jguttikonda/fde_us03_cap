@@ -2,7 +2,9 @@
 
 **Target duration:** 10 minutes  
 **Status:** Draft for team rehearsal; no rehearsal or sponsor acceptance is claimed  
-**Entry point:** `uv run python -m aog_recovery.controller.demo`  
+**Entry points:**
+- Offline CLI: `uv run python -m aog_recovery.controller.demo`
+- Local Controller UI: `uv run --env-file .env adk web adk_agents/controller_agent`
 **Evidence:** [Controller verification](controller-orchestration-verification.md) and [readiness verification](aog-recovery-readiness-verification.md)
 
 ## Before the Session
@@ -14,13 +16,7 @@ uv sync --locked --all-groups
 uv run python -m aog_recovery.controller.demo
 ```
 
-The demo uses synthetic evidence and deterministic local adapters. It needs no `.env`, model key, airline network, external service, or operational system. Run an individual scenario with one of `happy_path`, `cache_degraded`, `time_conflict`, or `close_score_choice`; append `--json` for structured output. The CLI is repeatable and makes no operational action.
-
-The CLI uses fixed typed Maintenance and Materials findings, runs the synthetic
-Operations adapter, and exercises Controller aggregation, compliance, scoring,
-and report generation. It does not invoke the Maintenance or Materials prompt
-pipelines, Controller intake/routing, or H3/H4 recorder; those boundaries are
-covered separately by the integration suite.
+The offline CLI demo uses synthetic evidence and deterministic local adapters. It needs no `.env`, model key, airline network, external service, or operational system. Run an individual scenario with one of `happy_path`, `cache_degraded`, `time_conflict`, or `close_score_choice`; append `--json` for structured output. The CLI is repeatable and makes no operational action.
 
 The CLI uses fixed typed Maintenance and Materials findings, runs the synthetic
 Operations adapter, and exercises Controller aggregation, compliance, scoring,
@@ -39,6 +35,51 @@ covered separately by the integration suite.
 | 7:00-8:30 | Run `uv run python -m aog_recovery.controller.demo close_score_choice`. | Two otherwise identical compliant P-120 repair candidates with equal synthetic ETA, cost, risk, and Operations impact. | Both tied options are shown in selection group 1 with their trade-offs; the report requests human selection and does not choose a winner. |
 | 8:30-10:00 | Summarize business value, limits, and next validation steps; take questions. | Review the four report outputs and evidence references; no additional operational input. | Emphasize that ranking prioritizes review, while humans own selection, airworthiness judgment, approval, and any operational action. |
 
+## ADK Web Setup
+
+The browser demo uses the Controller Web root and the same four fixed scenarios,
+but runs each through Controller intake, specialist orchestration, H3/H4
+recording, compliance, scoring, and report generation. From the repository root
+in PowerShell:
+
+```powershell
+uv sync --locked --all-groups
+Copy-Item .env.example .env
+```
+
+Set `GEMINI_API_KEY` in `.env` to a locally approved, non-placeholder credential,
+then start the Controller-only app:
+
+```powershell
+uv run --env-file .env adk web adk_agents/controller_agent
+```
+
+Open the local URL printed by ADK Web. Its server is unauthenticated and intended
+for local development; retain the default loopback binding and do not expose it
+to an untrusted or public network. Startup rejects a missing or template key but
+does not contact the provider to verify that a non-placeholder key is valid.
+
+The model provider handles the conversation: the presenter's prompt, the selected
+scenario name, and the returned synthetic report may be included in model
+requests. Case facts, Maintenance and Materials findings, inventory, fleet,
+schedule, package, cost, and evidence data come from local synthetic fixtures;
+no live airline, supplier, identity, or operational system is read or written.
+The tests invoke the ADK tool directly, block network connections, and make no
+model-provider call.
+
+### ADK Web Scenario Prompts
+
+| Scenario | Example prompt | Expected result |
+|---|---|---|
+| `happy_path` | “Run the happy path Controller demo.” | One evidence-backed repair candidate with confidence, trade-offs, and pending human approval. |
+| `cache_degraded` | “Show the cache-degraded inventory case.” | Live inventory failure and stale cached evidence remain visible; confidence is reduced and the case escalates with approval pending. |
+| `time_conflict` | “Run the three-hour versus seven-hour time-conflict case.” | Both estimates and their evidence references remain visible; the case escalates and approval stays pending. |
+| `close_score_choice` | “Show the close-score choice case.” | Both options appear in selection group 1; the model does not choose or approve one. |
+
+If the request is ambiguous, clarify which supported scenario to run. An
+unsupported name returns a structured failure listing the supported names; it
+does not create a report from user-supplied case facts.
+
 For machine-readable output, for example:
 
 ```powershell
@@ -49,7 +90,7 @@ uv run python -m aog_recovery.controller.demo --json happy_path cache_degraded
 
 The workflow brings technical feasibility, material readiness, and operational impact into one evidence-linked Controller report. This helps teams compare alternatives faster, exposes missing or stale information, and makes cost, package, risk, and timing trade-offs reviewable.
 
-The demo is offline and deterministic so the same inputs produce the same outputs without model variability or enterprise access. Typed contracts validate agent/tool boundaries; deterministic logic handles compliance, confidence, scoring, and close-score grouping. Compliance exclusions occur before ranking. Close scores require human choice, and every scenario leaves the human gate pending until the required people approve the same report/option.
+The CLI is offline and deterministic, so the same inputs produce the same outputs without model variability or enterprise access. ADK Web uses the model provider for conversational scenario selection and explanation, while the synthetic case and deterministic Controller report remain fixed. Neither path connects to airline or supplier systems. Typed contracts validate agent/tool boundaries; deterministic logic handles compliance, confidence, scoring, and close-score grouping. Compliance exclusions occur before ranking. Close scores require human choice, and every scenario leaves the human gate pending until the required people approve the same report/option.
 
 ## Risks and Caveats
 
@@ -58,7 +99,7 @@ The demo is offline and deterministic so the same inputs produce the same output
 - Cache data stays stale and does not establish current stock or part authorization. Conflicting time evidence requires human adjudication.
 - The Operations synthetic adapter is not a live schedule/fleet integration. The demo does not establish production readiness, airworthiness, regulatory compliance, or operational approval.
 - The demo invokes no purchase, transfer, shipment, booking, dispatch, delay, aircraft assignment, or other operational write.
-- The Controller demo is a local CLI, not an always-on service; no HTTP health endpoint or live enterprise health check is provided.
+- The Controller CLI and ADK Web are local demonstrations, not an always-on service; no HTTP health endpoint or live enterprise health check is provided. The ADK UI requires a configured model credential and must remain on loopback/trusted local access.
 - The close-score case demonstrates a pending selection gate; it does not collect or fabricate a real human decision.
 
 ## Future Improvements
