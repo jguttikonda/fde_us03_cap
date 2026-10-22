@@ -6,7 +6,7 @@ import pytest
 from aog_recovery.adapters.local import LocalReadOnlyAdapter, MockResponseMode
 from aog_recovery.contracts.agent import AgentResultStatus, AgentRole
 from aog_recovery.contracts.audit import AuditEvent
-from aog_recovery.contracts.governance import HumanDecisionRecord
+from aog_recovery.contracts.governance import HumanDecisionRecord, ReviewerRole
 from aog_recovery.contracts.tool import ToolName, ToolRequest, ToolResultStatus
 from aog_recovery.observability.structured import serialize_event
 from aog_recovery.operations.agent import OperationsAgent
@@ -190,17 +190,20 @@ def test_no_scenario_result_is_an_approval_ranking_or_execution(name: str) -> No
 def test_agent_output_never_satisfies_the_human_gate(name: str) -> None:
     scenario = SCENARIOS[name]()
     OperationsAgent(scenario.adapters).assess(scenario.request)
-    for needs_both in (True, False):
-        gate = assess_human_gate((), scenario.request.case.case_id, "v1", needs_both)
-        assert gate.status is HumanGateStatus.PENDING
-        assert gate.approved_roles == ()
+    gate = assess_human_gate((), scenario.request.case.case_id, "v1")
+    assert gate.status is HumanGateStatus.PENDING
+    assert gate.approved_roles == ()
+    assert gate.required_roles == (
+        ReviewerRole.OPS_LEAD,
+        ReviewerRole.MAINTENANCE_AIRWORTHINESS,
+    )
 
 
 def test_high_confidence_still_requires_a_human_decision_record() -> None:
     scenario = scenario_normal_repair()
     outcome = OperationsAgent(scenario.adapters).assess(scenario.request)
     assert outcome.result.confidence >= 0.70
-    gate = assess_human_gate((), scenario.request.case.case_id, "v1", True)
+    gate = assess_human_gate((), scenario.request.case.case_id, "v1")
     assert gate.status is HumanGateStatus.PENDING
     assert not isinstance(outcome.result, HumanDecisionRecord)
 

@@ -31,10 +31,11 @@ class ControllerAdkResponse(ContractModel):
 CONTROLLER_INSTRUCTION = """\
 You are the advisory Controller for aircraft-on-ground recovery coordination. Use the
 `orchestrate_aog_recovery_case` tool to validate intake, route specialists, and obtain the
-deterministic unranked handoff. Do not alter source values, calculate scores, rank candidates,
-select a winner, approve a decision, or execute an operational action. Missing, stale, conflicting,
-unavailable, or partial evidence must remain visible. Every handoff requires authorized human
-approval.
+deterministic decision brief, compliance exclusions, and human-gate state. The deterministic
+Controller workflow owns scoring, ranking, trade-off explanation, and report assembly. Do not
+alter source values or scores, independently rank candidates, select a winner, approve a decision,
+or execute an operational action. Missing, stale, conflicting, unavailable, or partial evidence
+must remain visible. Both authorized human roles must approve before any operational action.
 """
 
 
@@ -53,8 +54,9 @@ def build_controller_adk_agent(
         Args:
             payload: Versioned case, evidence, source-health, and candidate source data.
 
-        Returns:
-            Validation/routing findings and an optional unranked handoff requiring human review.
+            Returns:
+            Validation/routing findings, the candidate handoff, and an optional ranked decision
+            brief requiring human review.
         """
         try:
             result = await workflow.run(payload)
@@ -84,7 +86,8 @@ def build_controller_adk_agent(
         model=model_name,
         description=(
             "Advisory Controller: validates and coordinates candidate assessments, applies the "
-            "compliance gate, and returns an unranked handoff for human decision."
+            "compliance gate, ranks eligible options deterministically, and returns a decision "
+            "brief for human review."
         ),
         instruction=CONTROLLER_INSTRUCTION,
         tools=[orchestrate_aog_recovery_case],

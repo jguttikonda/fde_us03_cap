@@ -14,21 +14,28 @@ from aog_recovery.controller.context import (
     ControllerCaseContextRecorder,
 )
 from aog_recovery.controller.intake import IntakeRoutingResult, prepare_intake
-from aog_recovery.controller.models import RoutingOmission, UnrankedHandoff
+from aog_recovery.controller.models import (
+    RecoveryDecisionBrief,
+    RoutingOmission,
+    UnrankedHandoff,
+    WorkflowStatus,
+)
 from aog_recovery.controller.orchestration import (
     OperationsAssessmentPort,
     SpecialistAssessmentPort,
     assess_candidate_specialists,
     assess_operations_candidates,
 )
+from aog_recovery.controller.recommendation import build_recommendation
 
 
 class ControllerWorkflowResult(ContractModel):
-    """Inspectable validation/routing plus an optional unranked handoff."""
+    """Inspectable validation/routing, unranked handoff, and optional decision brief."""
 
     intake: IntakeRoutingResult
     handoff: UnrankedHandoff | None
     errors: tuple[StructuredError, ...]
+    recommendation: RecoveryDecisionBrief | None = None
 
 
 class ControllerWorkflow:
@@ -51,7 +58,7 @@ class ControllerWorkflow:
         self._operations = operations
         self._recorder = recorder
         self._settings = settings or AogSettings()
-        self._audit_recorder = audit_recorder
+        self._audit_recorder = audit_recorder or getattr(recorder, "audit", None)
         self._omitted_specialists = omitted_specialists
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -99,10 +106,24 @@ class ControllerWorkflow:
             audit_recorder=self._audit_recorder,
             occurred_at=self._clock(),
         )
+        audit_failure = any(
+            error.category == "controller_audit_append_failed" for error in handoff.errors
+        )
+        recommendation = (
+            None
+            if audit_failure or handoff.status is WorkflowStatus.FAILED
+            else build_recommendation(
+                handoff,
+                audit_recorder=self._audit_recorder,
+                occurred_at=self._clock(),
+            )
+        )
+        report_errors = recommendation.errors if recommendation is not None else ()
         return ControllerWorkflowResult(
             intake=intake_result,
             handoff=handoff,
-            errors=handoff.errors,
+            errors=(*handoff.errors, *report_errors),
+            recommendation=recommendation,
         )
 
 

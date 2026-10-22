@@ -61,6 +61,23 @@ class MaterialsLogisticsSpecialistAdapter:
         if assessment_input.case != request.case:
             return _input_failure(AgentRole.MATERIALS_LOGISTICS, "materials_case_mismatch")
 
+        selected_options = request.candidate.sourcing_options
+        if selected_options:
+            if len(selected_options) != 1 or selected_options[0] not in (
+                assessment_input.assessment.sourcing_options
+            ):
+                return _input_failure(
+                    AgentRole.MATERIALS_LOGISTICS,
+                    "materials_sourcing_option_unresolved",
+                )
+            assessment_input = assessment_input.model_copy(
+                update={
+                    "assessment": assessment_input.assessment.model_copy(
+                        update={"sourcing_options": selected_options}
+                    )
+                }
+            )
+
         unresolved = _materials_evidence_references(assessment_input).difference(
             request.available_evidence_ids
         )

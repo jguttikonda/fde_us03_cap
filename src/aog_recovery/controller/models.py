@@ -1,6 +1,7 @@
 """Versioned Controller workflow contracts (ARD-DAT-001..011, ARD-CTL-001/006/010)."""
 
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -8,17 +9,22 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from aog_recovery.contracts.agent import AgentResult, AgentRole, StructuredError
 from aog_recovery.contracts.base import ContractModel
-from aog_recovery.contracts.case import AogCase
+from aog_recovery.contracts.case import AogCase, TraceContext
 from aog_recovery.contracts.evidence import Evidence, EvidenceConflict, EvidenceWarning, Unknown
+from aog_recovery.contracts.governance import HumanDecisionRecord
 from aog_recovery.contracts.readiness import ReadinessEstimate
+from aog_recovery.contracts.readiness import SourcingMethod as CandidateSourcingMethod
 from aog_recovery.coordination.recording import ExchangeRecordingResult
+from aog_recovery.maintenance.models import MaintenanceRiskMetrics
 from aog_recovery.materials_logistics.models import SourcingOption
 from aog_recovery.operations.models import (
     CandidateOption,
     CapacityReservation,
+    ImpactLevel,
     OperationsOutcome,
     OptionKind,
     PackageLoadData,
+    PackageOutcome,
     ReroutePolicy,
     RouteConflict,
 )
@@ -26,6 +32,8 @@ from aog_recovery.validation.confidence import ConfidenceAssessment
 from aog_recovery.validation.human_gate import HumanGateAssessment, HumanGateStatus
 
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+ScoreValue = Annotated[Decimal, Field(ge=Decimal("0"), le=Decimal("100"))]
+NonNegativeUsd = Annotated[Decimal, Field(ge=Decimal("0"))]
 
 
 class WorkflowStatus(StrEnum):
@@ -255,4 +263,139 @@ class UnrankedHandoff(ContractModel):
         option_ids = tuple(item.result.candidate.option_id for item in self.candidates)
         if len(set(option_ids)) != len(option_ids):
             raise ValueError("candidate option_id values must be unique")
+        return self
+
+
+class RecommendationStatus(StrEnum):
+    RECOMMENDED = "recommended"
+    PROVISIONAL = "provisional"
+    REQUIRES_ESCALATION = "requires_escalation"
+    REJECTED = "rejected"
+    AWAITING_ADDITIONAL_DATA = "awaiting_additional_data"
+    RESOLVED = "resolved"
+
+
+class RecommendationWeights(ContractModel):
+    speed: Decimal = Decimal("0.30")
+    operational_package_impact: Decimal = Decimal("0.30")
+    risk: Decimal = Decimal("0.30")
+    cost: Decimal = Decimal("0.10")
+
+    @model_validator(mode="after")
+    def require_ard_baseline(self) -> RecommendationWeights:
+        expected = (Decimal("0.30"), Decimal("0.30"), Decimal("0.30"), Decimal("0.10"))
+        if (
+            self.speed,
+            self.operational_package_impact,
+            self.risk,
+            self.cost,
+        ) != expected:
+            raise ValueError("recommendation weights must use the ARD 30/30/30/10 baseline")
+        return self
+
+
+class RecommendationFactorScores(ContractModel):
+    speed: ScoreValue
+    operational_package_impact: ScoreValue
+    risk: ScoreValue
+    cost: ScoreValue
+
+
+class RecommendationCostBreakdown(ContractModel):
+    repair_labor_usd: NonNegativeUsd
+    sourcing_usd: NonNegativeUsd
+    operations_usd: NonNegativeUsd
+    total_usd: NonNegativeUsd
+
+    @model_validator(mode="after")
+    def require_total(self) -> RecommendationCostBreakdown:
+        if self.total_usd != self.repair_labor_usd + self.sourcing_usd + self.operations_usd:
+            raise ValueError("total_usd must equal the sum of cost components")
+        return self
+
+
+class ScoredRecoveryOption(ContractModel):
+    option_id: NonEmptyString
+    kind: OptionKind
+    description: NonEmptyString
+    sourcing_method: CandidateSourcingMethod | None
+    readiness_eta: datetime
+    affected_routes: tuple[NonEmptyString, ...]
+    impact_level: ImpactLevel
+    schedule_delay_minutes: Annotated[int, Field(ge=0)] | None
+    package: PackageOutcome
+    maintenance_risk_metrics: MaintenanceRiskMetrics
+    technical_risks: tuple[NonEmptyString, ...]
+    operational_risks: tuple[NonEmptyString, ...]
+    assumptions: tuple[NonEmptyString, ...]
+    factor_scores: RecommendationFactorScores
+    aggregate_score: ScoreValue
+    cost: RecommendationCostBreakdown
+    evidence_references: tuple[NonEmptyString, ...] = Field(min_length=1)
+    trade_off: NonEmptyString
+
+
+class RankedRecoveryOption(ScoredRecoveryOption):
+    rank: Annotated[int, Field(gt=0)]
+    selection_group: Annotated[int, Field(gt=0)] | None = None
+
+
+class ExcludedRecoveryOption(ContractModel):
+    option_id: NonEmptyString
+    kind: OptionKind
+    description: NonEmptyString
+    exclusion_reasons: tuple[NonEmptyString, ...] = Field(min_length=1)
+    evidence_references: tuple[NonEmptyString, ...] = ()
+
+
+class UnscoredRecoveryOption(ContractModel):
+    option_id: NonEmptyString
+    kind: OptionKind
+    description: NonEmptyString
+    reasons: tuple[NonEmptyString, ...] = Field(min_length=1)
+    evidence_references: tuple[NonEmptyString, ...] = ()
+
+
+class RecoveryDecisionBrief(ContractModel):
+    """Versioned, advisory Controller report for human recovery selection."""
+
+    schema_version: Literal["1.0"]
+    recommendation_version: NonEmptyString
+    scoring_algorithm_version: NonEmptyString
+    case_id: NonEmptyString
+    trace_context: TraceContext
+    status: RecommendationStatus
+    summary: NonEmptyString
+    ranked_options: tuple[RankedRecoveryOption, ...]
+    excluded_options: tuple[ExcludedRecoveryOption, ...]
+    unscored_options: tuple[UnscoredRecoveryOption, ...]
+    weights: RecommendationWeights
+    confidence: ConfidenceAssessment
+    human_gate: HumanGateAssessment
+    requires_human_selection: bool
+    required_human_action: NonEmptyString
+    assumptions: tuple[NonEmptyString, ...]
+    risks: tuple[NonEmptyString, ...]
+    warnings: tuple[EvidenceWarning, ...]
+    conflicts: tuple[EvidenceConflict, ...]
+    unknowns: tuple[Unknown, ...]
+    missing_data: tuple[NonEmptyString, ...]
+    errors: tuple[StructuredError, ...]
+    human_decisions: tuple[HumanDecisionRecord, ...] = ()
+
+    @model_validator(mode="after")
+    def require_unique_option_ids_and_ranks(self) -> RecoveryDecisionBrief:
+        option_ids = (
+            *(item.option_id for item in self.ranked_options),
+            *(item.option_id for item in self.excluded_options),
+            *(item.option_id for item in self.unscored_options),
+        )
+        if len(set(option_ids)) != len(option_ids):
+            raise ValueError("recommendation option IDs must be unique")
+        ranks = tuple(item.rank for item in self.ranked_options)
+        if len(set(ranks)) != len(ranks):
+            raise ValueError("ranked option ranks must be unique")
+        decision_ids = tuple(item.decision_id for item in self.human_decisions)
+        if len(set(decision_ids)) != len(decision_ids):
+            raise ValueError("human decision IDs must be unique")
         return self

@@ -111,6 +111,49 @@ def test_human_decision_is_bound_to_recommendation_and_role() -> None:
     assert decision.reviewer_role is ReviewerRole.MAINTENANCE_AIRWORTHINESS
 
 
+def test_human_decision_rejects_naive_timestamp_and_empty_reviewer() -> None:
+    decision = HumanDecisionRecord(
+        schema_version="1.0",
+        decision_id="decision-invalid-fixture",
+        case_id="case-001",
+        decision=HumanDecisionType.APPROVE,
+        selected_action="repair",
+        selected_option_id="option-001",
+        reviewer_id="synthetic-reviewer-001",
+        reviewer_role=ReviewerRole.OPS_LEAD,
+        decided_at=TIMESTAMP,
+        rationale="Synthetic approval test record",
+        recommendation_version="recommendation-v1",
+    )
+    payload = decision.model_dump()
+    payload["decided_at"] = datetime(2026, 10, 21, 12, 0)
+
+    with pytest.raises(ValidationError, match="include a timezone"):
+        HumanDecisionRecord.model_validate(payload)
+
+    payload["decided_at"] = TIMESTAMP
+    payload["reviewer_id"] = " "
+    with pytest.raises(ValidationError):
+        HumanDecisionRecord.model_validate(payload)
+
+
+def test_human_approval_requires_selected_action_and_option() -> None:
+    with pytest.raises(ValidationError, match="approval must identify"):
+        HumanDecisionRecord(
+            schema_version="1.0",
+            decision_id="decision-missing-option",
+            case_id="case-001",
+            decision=HumanDecisionType.APPROVE,
+            selected_action=None,
+            selected_option_id=None,
+            reviewer_id="synthetic-reviewer-001",
+            reviewer_role=ReviewerRole.OPS_LEAD,
+            decided_at=TIMESTAMP,
+            rationale="Synthetic approval without an option",
+            recommendation_version="recommendation-v1",
+        )
+
+
 def test_audit_event_retains_case_and_trace_metadata() -> None:
     event = AuditEvent(
         schema_version="1.0",

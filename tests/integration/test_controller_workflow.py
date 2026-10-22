@@ -414,6 +414,34 @@ async def test_adk_agent_binds_versioned_workflow_response_without_model_call() 
     assert response.workflow is not None
     assert response.workflow.handoff is not None
     assert response.workflow.handoff.human_gate.status.value == "pending"
+    assert response.workflow.recommendation is not None
+    assert response.workflow.recommendation.case_id == response.workflow.handoff.case.case_id
+    assert response.workflow.recommendation.human_gate.status.value == "pending"
+    assert response.workflow.recommendation.weights.speed == Decimal("0.30")
+    assert tool_context.actions.skip_summarization
+
+
+@pytest.mark.asyncio
+async def test_adk_response_preserves_partial_decision_brief_and_errors() -> None:
+    workflow, _, _, _, _ = create_workflow(maintenance_fail_kinds=frozenset({OptionKind.SWAP}))
+    agent = build_controller_adk_agent(workflow, model_name="test-model")
+    tool_context = SimpleNamespace(actions=SimpleNamespace(skip_summarization=False))
+
+    result = await agent.tools[0](make_intake_payload(), tool_context)
+    response = ControllerAdkResponse.model_validate_json(json.dumps(result))
+
+    assert response.status == "complete"
+    assert response.workflow is not None
+    assert response.workflow.handoff is not None
+    assert response.workflow.recommendation is not None
+    assert response.workflow.errors
+    assert response.workflow.recommendation.errors
+    assert response.workflow.recommendation.human_gate.status.value == "pending"
+    assert response.workflow.recommendation.status.value in {
+        "provisional",
+        "requires_escalation",
+        "awaiting_additional_data",
+    }
     assert tool_context.actions.skip_summarization
 
 
@@ -472,6 +500,7 @@ async def test_adk_boundary_keeps_untrusted_intake_invalid_without_fallback() ->
     assert response.workflow is not None
     assert not response.workflow.intake.validation.is_valid
     assert response.workflow.handoff is None
+    assert response.workflow.recommendation is None
     assert maintenance.calls == []
     assert materials.calls == []
     assert operations.calls == []
@@ -493,17 +522,7 @@ async def test_adk_boundary_keeps_untrusted_intake_invalid_without_fallback() ->
                 collect_properties(definition)
 
     collect_properties(schema)
-    assert schema_properties.isdisjoint(
-        {
-            "score",
-            "rank",
-            "recommended_winner",
-            "approval",
-            "action",
-            "execute",
-            "execute_transfer",
-        }
-    )
+    assert schema_properties.isdisjoint({"execute", "execute_transfer"})
 
 
 @pytest.mark.asyncio
@@ -588,6 +607,20 @@ async def test_concurrent_workflows_isolate_case_results_and_context_events() ->
     assert events_a and events_b
     assert all(event.trace_context.trace_id == trace_a["trace_id"] for event in events_a)
     assert all(event.trace_context.trace_id == trace_b["trace_id"] for event in events_b)
+    recommendation_a = next(
+        event for event in events_a if event.event_type == "controller_recommendation"
+    )
+    recommendation_b = next(
+        event for event in events_b if event.event_type == "controller_recommendation"
+    )
+    assert result_a.recommendation is not None
+    assert result_b.recommendation is not None
+    assert recommendation_a.details["recommendation_version"] == (
+        result_a.recommendation.recommendation_version
+    )
+    assert recommendation_b.details["recommendation_version"] == (
+        result_b.recommendation.recommendation_version
+    )
     assert all(case_a_id in str(event.details.get("candidate_id", case_a_id)) for event in events_a)
     assert all(case_b_id in str(event.details.get("candidate_id", case_b_id)) for event in events_b)
     assert all(
@@ -706,7 +739,23 @@ async def test_specialist_adapters_preserve_candidate_domain_inputs() -> None:
         }
     )
     materials_input = specialist_materials_input().model_copy(update={"case": case})
-    source = payload["candidate_sources"][0]
+    selected_offer = materials_input.assessment.sourcing_options[0]
+    other_offer = selected_offer.model_copy(
+        update={
+            "source": "synthetic-vendor-source",
+            "method": SourcingMethod.VENDOR_PURCHASE,
+            "estimated_cost_usd": Decimal("200.00"),
+        }
+    )
+    materials_input = materials_input.model_copy(
+        update={
+            "assessment": materials_input.assessment.model_copy(
+                update={"sourcing_options": (selected_offer, other_offer)}
+            )
+        }
+    )
+    source = payload["candidate_sources"][1]
+    source["sourcing_options"] = [selected_offer.model_dump(mode="json")]
     source["maintenance_assessment_input"] = maintenance_input.model_dump(mode="json")
     source["materials_logistics_assessment_input"] = materials_input.model_dump(mode="json")
 
@@ -757,7 +806,7 @@ async def test_specialist_adapters_preserve_candidate_domain_inputs() -> None:
     )
 
     intake = ControllerIntake.model_validate_json(json.dumps(payload))
-    candidate = build_candidates(intake)[0]
+    candidate = build_candidates(intake)[1]
     request = CandidateSpecialistRequest(
         schema_version="1.0",
         request_id=f"{candidate.candidate.option_id}:maintenance",
@@ -788,9 +837,9 @@ async def test_specialist_adapters_preserve_candidate_domain_inputs() -> None:
         maintenance_input.parts_readiness_evidence_reference
     )
     assert materials_runner.payloads[0]["case"]["case_id"] == case.case_id
-    assert materials_runner.payloads[0]["assessment"]["sourcing_options"][0]["part_number"] == (
-        materials_input.assessment.sourcing_options[0].part_number
-    )
+    assert materials_runner.payloads[0]["assessment"]["sourcing_options"] == [
+        selected_offer.model_dump(mode="json")
+    ]
     assert materials_runner.payloads[0]["evidence_summary"]["evidence_references"] == list(
         materials_input.evidence_summary.evidence_references
     )
@@ -837,21 +886,38 @@ async def test_specialist_adapters_keep_invalid_inputs_candidate_local() -> None
             errors=(),
         ),
     )
+    first_offer = SourcingOption.model_validate_json(
+        json.dumps(payload["candidate_sources"][0]["sourcing_options"][0])
+    )
+    second_offer = SourcingOption.model_validate_json(
+        json.dumps(payload["candidate_sources"][1]["sourcing_options"][0])
+    )
+    first_materials_input = materials_input.model_copy(
+        update={
+            "assessment": materials_input.assessment.model_copy(
+                update={"sourcing_options": (first_offer,)}
+            )
+        }
+    )
+    second_materials_input = materials_input.model_copy(
+        update={
+            "assessment": materials_input.assessment.model_copy(
+                update={"sourcing_options": (second_offer,)}
+            ),
+            "evidence_summary": materials_input.evidence_summary.model_copy(
+                update={"evidence_references": ("missing-materials-evidence",)}
+            ),
+        }
+    )
     payload["candidate_sources"][0]["maintenance_assessment_input"] = maintenance_input.model_dump(
         mode="json"
     )
     payload["candidate_sources"][0]["materials_logistics_assessment_input"] = (
-        materials_input.model_dump(mode="json")
+        first_materials_input.model_dump(mode="json")
     )
     payload["candidate_sources"][1]["maintenance_assessment_input"] = {"schema_version": "9.0"}
     payload["candidate_sources"][1]["materials_logistics_assessment_input"] = (
-        materials_input.model_copy(
-            update={
-                "evidence_summary": materials_input.evidence_summary.model_copy(
-                    update={"evidence_references": ("missing-materials-evidence",)}
-                )
-            }
-        ).model_dump(mode="json")
+        second_materials_input.model_dump(mode="json")
     )
 
     intake = ControllerIntake.model_validate_json(json.dumps(payload))
@@ -927,6 +993,22 @@ async def test_workflow_returns_multi_candidate_unranked_handoff_with_pending_hu
     assert result.handoff is not None
     assert len(result.handoff.candidates) == 4
     assert result.handoff.human_gate.status.value == "pending"
+    assert result.recommendation is not None
+    reported_kinds = {
+        option.kind
+        for option in (
+            *result.recommendation.ranked_options,
+            *result.recommendation.excluded_options,
+            *result.recommendation.unscored_options,
+        )
+    }
+    assert reported_kinds == {
+        OptionKind.REPAIR_ORIGINAL,
+        OptionKind.REPAIR_ALTERNATE,
+        OptionKind.SWAP,
+        OptionKind.DELAY,
+    }
+    assert result.recommendation.human_gate.status.value == "pending"
     assert len(maintenance.calls) == 4
     assert len(materials.calls) == 4
     assert len(operations.calls) == 4
@@ -942,6 +1024,21 @@ async def test_workflow_returns_multi_candidate_unranked_handoff_with_pending_hu
     )
     assert any(event.event_type == "controller_handoff" for event in store.events)
     assert sum(event.event_type == "peer_exchange" for event in store.events) == 4
+
+
+@pytest.mark.asyncio
+async def test_workflow_does_not_create_brief_when_handoff_audit_fails() -> None:
+    case = default_case()
+    store = InMemoryControllerContextStore(
+        fail_on_event_ids=frozenset({f"{case.case_id}:unranked-handoff"})
+    )
+    workflow, _, _, _, _ = create_workflow(store=store)
+
+    result = await workflow.run(make_intake_payload())
+
+    assert result.handoff is not None
+    assert any(error.category == "controller_audit_append_failed" for error in result.errors)
+    assert result.recommendation is None
 
 
 @pytest.mark.asyncio

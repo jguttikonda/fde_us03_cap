@@ -133,12 +133,10 @@ def build_unranked_handoff(
         default=0.0,
     )
     confidence = assess_confidence(confidence_value, conflicts, unknowns)
-    requires_repair_approval = any(result.candidate.kind in _REPAIR_KINDS for result in aggregated)
     human_gate = assess_human_gate(
         decisions=(),
         case_id=case.case_id,
         recommendation_version="unranked-handoff-v1",
-        requires_repair_or_part_approval=requires_repair_approval,
     )
     status = _workflow_status(aggregated, confidence)
 

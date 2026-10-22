@@ -40,11 +40,11 @@ Each per-candidate Operations invocation MUST be bounded by configured timeout p
 
 ### Requirement: ADK response preserves the deterministic workflow contract
 
-The Controller ADK entry point MUST expose the versioned deterministic workflow result without substituting model-generated success for validation or specialist outcomes. The response MUST remain advisory, unranked, and pending human decision, with no operational action capability. (ARD-TEC-002/005, ARD-CTL-010/017..018, ARD-GOV-008, ARD-SEC-001..003)
+The Controller ADK entry point MUST expose the versioned deterministic completed workflow result, including the ranked decision brief, compliance exclusions, evidence gaps, confidence disposition, and human-gate state. It MUST NOT substitute model-generated success or alter deterministic scores. The response MUST remain advisory and MUST expose no operational action capability. (ARD-TEC-002/005, ARD-CTL-009..010/016..018, ARD-GOV-008, ARD-SEC-001..003)
 
 #### Scenario: Valid deterministic workflow response
-- **WHEN** the deterministic workflow returns a validated handoff
-- **THEN** the ADK boundary returns the typed workflow response with its status, evidence gaps, exclusions, and pending human gate intact (ARD-DAT-006/010, ARD-GOV-008)
+- **WHEN** the deterministic workflow returns a validated recommendation
+- **THEN** the ADK boundary returns the typed report with ranking, evidence gaps, exclusions, status, and pending human gate intact (ARD-DAT-006/010, ARD-CTL-016, ARD-GOV-008)
 
 #### Scenario: Workflow validation or execution fails
 - **WHEN** deterministic workflow validation fails or its result cannot be validated
@@ -52,11 +52,11 @@ The Controller ADK entry point MUST expose the versioned deterministic workflow 
 
 #### Scenario: Compliance exclusion and conflicting evidence remain visible
 - **WHEN** a candidate fails a deterministic compliance check or its evidence conflicts
-- **THEN** the handoff retains the exclusion reason or conflict and escalates as required without ranking the candidate (ARD-CTL-017..018, ARD-GOV-002..005)
+- **THEN** the report retains the exclusion reason or conflict, assigns no score or rank to an excluded candidate, and escalates or marks provisional as required (ARD-CTL-017, ARD-GOV-002..005)
 
 #### Scenario: Human approval remains pending
-- **WHEN** the Controller returns any valid handoff, including a high-confidence eligible candidate
-- **THEN** the response preserves the pending human gate and exposes no approval decision or operational action (ARD-GOV-006..008, ARD-PRN-001..002)
+- **WHEN** the Controller returns any recommendation, including a high-confidence or close-scored result
+- **THEN** the response preserves the pending human gate, requires the Ops lead and Maintenance/airworthiness authority approvals, and exposes no approval decision or operational action (ARD-GOV-001/006..008, ARD-PRN-001..002)
 
 ### Requirement: Concurrent Controller cases remain isolated
 
