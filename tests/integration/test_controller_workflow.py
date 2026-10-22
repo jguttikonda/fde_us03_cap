@@ -16,8 +16,8 @@ from test_specialist_workflow import maintenance_input as specialist_maintenance
 from test_specialist_workflow import materials_input as specialist_materials_input
 
 from aog_recovery.config import AogSettings
-from aog_recovery.contracts.agent import AgentResult, AgentResultStatus, AgentRole
-from aog_recovery.contracts.evidence import Evidence, EvidenceValidity
+from aog_recovery.contracts.agent import AgentResult, AgentResultStatus, AgentRole, StructuredError
+from aog_recovery.contracts.evidence import Evidence, EvidenceValidity, EvidenceWarning
 from aog_recovery.contracts.readiness import EtaBasis, ReadinessEstimate
 from aog_recovery.contracts.tool import ToolResultStatus
 from aog_recovery.controller.adk_agent import ControllerAdkResponse, build_controller_adk_agent
@@ -93,10 +93,13 @@ class FakeSpecialist:
         self.role = role
         self.fail_kinds = fail_kinds
         self.fail_case_id: str | None = None
+        self.result_override: AgentResult | None = None
         self.calls: list[CandidateSpecialistRequest] = []
 
     async def assess(self, request: CandidateSpecialistRequest) -> AgentResult:
         self.calls.append(request)
+        if self.result_override is not None:
+            return self.result_override
         if request.candidate.candidate.kind in self.fail_kinds and (
             self.fail_case_id is None or request.case.case_id == self.fail_case_id
         ):
@@ -154,21 +157,25 @@ def evidence_bundle(
 ) -> tuple[Evidence, ...]:
     primary = Evidence(
         evidence_id="evidence-controller-001",
-        source="synthetic-controller-source",
+        source=("synthetic-maintenance-estimate" if conflicting else "synthetic-controller-source"),
         retrieved_at=NOW,
         validity_state=validity,
-        claim_reference="claim-controller-readiness",
-        content={"readiness": "synthetic"},
+        claim_reference="recovery-time-estimate" if conflicting else "claim-controller-readiness",
+        content=(
+            {"estimate_hours": 3, "estimate_type": "maintenance_repair"}
+            if conflicting
+            else {"readiness": "synthetic"}
+        ),
     )
     if not conflicting:
         return (primary,)
     contradictory = Evidence(
         evidence_id="evidence-controller-conflict-001",
-        source="synthetic-conflict-source",
+        source="synthetic-operations-disruption",
         retrieved_at=NOW,
         validity_state=EvidenceValidity.CONFLICTING,
         claim_reference=primary.claim_reference,
-        content={"readiness": "different-synthetic-value"},
+        content={"estimate_hours": 7, "estimate_type": "operations_disruption"},
     )
     return primary, contradictory
 
@@ -688,6 +695,10 @@ async def test_operations_timeout_is_bounded_visible_and_candidate_local() -> No
         assert delay.confidence is not None
         assert delay.confidence.confidence <= 0.49
         assert delay.confidence.disposition is ConfidenceDisposition.ESCALATION_REQUIRED
+        assert result.recommendation is not None
+        assert result.recommendation.human_gate.status.value == "pending"
+        assert any(error.category == "operations_timeout" for error in result.recommendation.errors)
+        assert "operations_analysis" in result.recommendation.missing_data
         assert delay.candidate.option_id in timeout_error.message
         assert f"{delay.candidate.option_id}:operations" in timeout_error.message
         assert timeout_event.event_id == f"{delay.candidate.option_id}:operations:failed"
@@ -1008,7 +1019,31 @@ async def test_workflow_returns_multi_candidate_unranked_handoff_with_pending_hu
         OptionKind.SWAP,
         OptionKind.DELAY,
     }
+    swap = next(
+        candidate
+        for candidate in result.handoff.candidates
+        if candidate.result.candidate.kind is OptionKind.SWAP
+    )
+    assert swap.eligible
+    assert swap.result.evidence
+    assert swap.result.operations_result is not None
+    assert swap.result.operations_result.assessment is not None
+    assert swap.result.operations_result.assessment.recovery_options[0].viability.value in {
+        "viable",
+        "viable_with_risk",
+    }
+    report_options = (
+        *result.recommendation.ranked_options,
+        *result.recommendation.excluded_options,
+        *result.recommendation.unscored_options,
+    )
+    report_swap = next(option for option in report_options if option.kind is OptionKind.SWAP)
+    assert report_swap.evidence_references
     assert result.recommendation.human_gate.status.value == "pending"
+    assert not any(
+        hasattr(result.recommendation, action)
+        for action in ("purchase", "transfer", "book", "dispatch", "approve")
+    )
     assert len(maintenance.calls) == 4
     assert len(materials.calls) == 4
     assert len(operations.calls) == 4
@@ -1024,6 +1059,17 @@ async def test_workflow_returns_multi_candidate_unranked_handoff_with_pending_hu
     )
     assert any(event.event_type == "controller_handoff" for event in store.events)
     assert sum(event.event_type == "peer_exchange" for event in store.events) == 4
+    h4_responses = [
+        event.exchange_record.message
+        for event in store.events
+        if event.event_type == "peer_exchange"
+        and event.exchange_record is not None
+        and event.exchange_record.direction.value == "response"
+    ]
+    assert len(h4_responses) == 2
+    assert all(response.failed_part_number == "P-110" for response in h4_responses)
+    assert all(response.preferred_part_number == "P-120" for response in h4_responses)
+    assert any(item.startswith("readiness_eta") for item in result.recommendation.missing_data)
 
 
 @pytest.mark.asyncio
@@ -1087,6 +1133,9 @@ async def test_workflow_preserves_degraded_evidence_and_excludes_unverified_part
 
     assert stale_result.handoff is not None
     assert any(warning.code == "STALE_EVIDENCE" for warning in stale_result.handoff.warnings)
+    assert stale_result.recommendation is not None
+    assert stale_result.recommendation.human_gate.status.value == "pending"
+    assert any(warning.code == "STALE_EVIDENCE" for warning in stale_result.recommendation.warnings)
     assert stale_result.handoff.status in {
         WorkflowStatus.PROVISIONAL,
         WorkflowStatus.ESCALATION_REQUIRED,
@@ -1094,11 +1143,121 @@ async def test_workflow_preserves_degraded_evidence_and_excludes_unverified_part
     assert conflict_result.handoff is not None
     assert conflict_result.handoff.conflicts
     assert conflict_result.handoff.status is WorkflowStatus.ESCALATION_REQUIRED
+    assert conflict_result.recommendation is not None
+    assert conflict_result.recommendation.status.value == "requires_escalation"
+    assert conflict_result.recommendation.human_gate.status.value == "pending"
+    assert any(
+        warning.code == "CONFLICTING_EVIDENCE"
+        for warning in conflict_result.recommendation.warnings
+    )
+    conflict_estimates = {
+        item.source: item.content.get("estimate_hours")
+        for item in conflict_result.handoff.evidence
+        if item.claim_reference == "recovery-time-estimate"
+    }
+    assert conflict_estimates == {
+        "synthetic-maintenance-estimate": 3,
+        "synthetic-operations-disruption": 7,
+    }
+    assert conflict_result.recommendation.conflicts
+    assert set(conflict_result.recommendation.conflicts[0].evidence_references) == {
+        "evidence-controller-001",
+        "evidence-controller-conflict-001",
+    }
     assert all(
         not candidate.eligible
         for candidate in conflict_result.handoff.candidates
         if candidate.result.candidate.kind
         in {OptionKind.REPAIR_ORIGINAL, OptionKind.REPAIR_ALTERNATE}
+    )
+
+
+@pytest.mark.asyncio
+async def test_cached_inventory_failure_reaches_controller_report_and_correlated_audit() -> None:
+    workflow, _, materials, _, store = create_workflow()
+    source_error = StructuredError(
+        schema_version="1.0",
+        category="source_unavailable",
+        component="materials-adapter:part_inventory",
+        message="inventory source is unavailable",
+        retryable=False,
+        case_impact="inventory is represented by stale cached evidence",
+    )
+    cached_warning = EvidenceWarning(
+        warning_id="cached-inventory-warning",
+        claim_reference="inventory-claim-controller",
+        code="CACHED_EVIDENCE",
+        message="cached inventory may be stale",
+        source_reference="synthetic-inventory-cache",
+    )
+    evidence_summary = MaterialsEvidenceSummary(
+        status=ToolResultStatus.PARTIAL,
+        confidence=0.72,
+        evidence_references=("evidence-controller-001",),
+        warnings=(cached_warning,),
+        errors=(source_error,),
+    )
+    payload = materials_payload().model_copy(update={"evidence_summary": evidence_summary})
+    materials.result_override = AgentResult(
+        schema_version="1.0",
+        agent_role=AgentRole.MATERIALS_LOGISTICS,
+        status=AgentResultStatus.PARTIAL,
+        summary="Materials assessment uses degraded cached inventory",
+        confidence=0.72,
+        assumptions=(),
+        evidence_references=("evidence-controller-001",),
+        role_payload=payload.model_dump(mode="json"),
+    )
+
+    result = await workflow.run(make_intake_payload(validity=EvidenceValidity.STALE))
+
+    assert result.handoff is not None
+    assert result.handoff.human_gate.status.value == "pending"
+    assert any(warning.code == "CACHED_EVIDENCE" for warning in result.handoff.warnings)
+    assert any(error.category == "source_unavailable" for error in result.handoff.errors)
+    response_events = [
+        event
+        for event in store.events
+        if event.event_type == "peer_exchange"
+        and event.exchange_record is not None
+        and event.exchange_record.direction.value == "response"
+    ]
+    assert response_events
+    for event in response_events:
+        assert event.case_id == result.handoff.case.case_id
+        assert event.trace_context == result.handoff.case.trace_context
+        assert event.exchange_record is not None
+        h4_response = event.exchange_record.message
+        assert any(warning.code == "CACHED_EVIDENCE" for warning in h4_response.warnings)
+        assert any(error.category == "source_unavailable" for error in h4_response.errors)
+
+
+@pytest.mark.asyncio
+async def test_malformed_specialist_schema_remains_visible_in_controller_report() -> None:
+    workflow, _, materials, _, _ = create_workflow()
+    materials.result_override = AgentResult(
+        schema_version="1.0",
+        agent_role=AgentRole.MATERIALS_LOGISTICS,
+        status=AgentResultStatus.COMPLETE,
+        summary="Synthetic malformed Materials result",
+        confidence=0.82,
+        assumptions=(),
+        evidence_references=("evidence-controller-001",),
+        role_payload={"schema_version": "9.0"},
+    )
+
+    result = await workflow.run(make_intake_payload())
+
+    assert result.handoff is not None
+    assert result.recommendation is not None
+    assert result.recommendation.human_gate.status.value == "pending"
+    assert result.recommendation.status.value == "requires_escalation"
+    assert any(
+        error.category == "specialist_result_validation_failed"
+        for error in result.recommendation.errors
+    )
+    assert any(
+        error.category == "peer_exchange_payload_invalid" for error in result.recommendation.errors
     )
 
 
@@ -1153,6 +1312,12 @@ async def test_workflow_honors_omitted_and_unavailable_specialist_routes() -> No
     unavailable_result = await unavailable_workflow.run(unavailable_payload)
 
     assert unavailable_result.handoff is not None
+    assert unavailable_result.recommendation is not None
+    assert unavailable_result.recommendation.human_gate.status.value == "pending"
+    assert any(
+        error.category == "specialist_source_unavailable"
+        for error in unavailable_result.recommendation.errors
+    )
     assert unavailable_materials.calls == []
     assert unavailable_result.handoff.routing is not None
     assert any(

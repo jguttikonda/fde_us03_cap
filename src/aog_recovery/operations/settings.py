@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
@@ -53,6 +53,24 @@ class OperationsSettings(BaseSettings):
     penalty_undetermined_candidate: Penalty = 0.20
 
     adk_model: str = Field(default="gemini-3.5-flash", validation_alias="ADK_MODEL")
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        repr=False,
+        exclude=True,
+        validation_alias="GEMINI_API_KEY",
+    )
+
+    def require_model_credential(self) -> None:
+        credential = (
+            self.gemini_api_key.get_secret_value().strip()
+            if self.gemini_api_key is not None
+            else ""
+        )
+        if not credential or credential.casefold() == "your-vocareum-key-here":
+            raise ValueError(
+                "GEMINI_API_KEY is missing or is still a template placeholder; "
+                "model-backed Operations ADK startup cannot continue"
+            )
 
     @model_validator(mode="after")
     def require_ordered_thresholds(self) -> OperationsSettings:

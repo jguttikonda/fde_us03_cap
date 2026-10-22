@@ -1,6 +1,6 @@
 # Go/No-Go Checklist
 
-**Change:** `rank-aog-recovery-recommendations`  
+**Change:** `validate-aog-recovery-readiness`
 **Record status:** Draft; team decision pending  
 **Decision owner(s):** Pending team entry  
 **Decision date:** Pending team review
@@ -9,35 +9,37 @@
 
 | Check | Evidence | Status |
 |---|---|---|
-| Requirements and traceability documented | Proposal, `recovery-recommendations`, `recovery-orchestration`, and `controller-runtime-integration` deltas; ARD mapping in `docs/controller-orchestration-verification.md` | Complete for this implementation |
-| Contracts and behavior tests | Versioned report, scoring/ranking, candidate sourcing, compliance, human gate, audit, and ADK tests | Complete; see test summary below |
-| Test results retained | `uv run pytest --cov=aog_recovery --cov-report=term` | 463 passed; 93% total coverage |
-| Lint and format | `uv run ruff check .`; `uv run ruff format --check .` | Passed; 202 files formatted |
-| Type checks | `uv run mypy src` | Passed; 67 source files |
-| OpenSpec validation | `openspec validate --changes "rank-aog-recovery-recommendations" --strict` | Passed |
-| Code review complete | Qualified peer review and final RAPID recommendation in `docs/rapid-peer-review.md` | Pending human review |
-| Security/readiness review | InfoSec, Reference Architecture, secret scanning, Bandit, and dependency-audit review | Not completed by this change; reviewer/team to record outcome |
-| Sponsor demonstration | Human-led demonstration and live Q&A | Pending; no sponsor acceptance claimed |
-| Operational approval | Ops lead and Maintenance/airworthiness authority approval for any operational recommendation | Always required; no operational action is executed by this system |
+| ARD and rubric traceability | Active OpenSpec proposal, design, four capability deltas, task list, [consolidated readiness record](aog-recovery-readiness-verification.md), and Controller/Materials evidence maps | `openspec validate --changes "validate-aog-recovery-readiness" --strict` valid; no issues |
+| Core contracts and recovery behavior | Cache fallback through the built ADK inventory tool, Controller functional cases, degraded/failure/conflict cases, close-score selection, and human-gate tests | 488 tests passed; 93% total coverage in a fresh Python 3.14.7 environment |
+| Lint, format, and types | `uv run ruff check .`; `uv run ruff format --check .`; `uv run mypy src` | Passed; 216 files formatted; no issues in 68 source files |
+| Locked setup | `uv sync --locked --all-groups`; `uv lock --check` | Passed; 91 locked packages installed and lockfile synchronized |
+| Security scans | Bandit 1.9.4, pip-audit 2.10.1, Gitleaks 8.30.1; details in `docs/controller-orchestration-verification.md` | No medium/high Bandit issues or known dependency vulnerabilities; low findings and scan limits are listed for review |
+| Local startup/readiness | Secret-free `AogSettings` check and offline Operations synthetic demo | Passed; local/mock only. No HTTP health endpoint or live enterprise connectivity is provided. |
+| Backout readiness | Whole-workflow backout in `docs/rapid-peer-review.md` | Drafted; release owner must identify the known-good baseline before any release decision |
+| Controller sponsor demo and runbook | Offline four-scenario CLI, ten-minute [runbook](capstone-demo-runbook.md), and focused tests | Demo code and runbook are present; rehearsal, acceptance, and presentation remain pending |
+| Qualified peer/InfoSec/Reference Architecture review | RAPID record and applicable project review criteria | Pending human review; identities and conclusions not supplied |
+| Operational approval | Ops lead plus Maintenance/airworthiness authority for applicable decisions | Always required. Agents do not execute operational actions. |
 
-## Outstanding Issues and Conditions
+## Findings and Conditions
 
-- A qualified reviewer must complete the six Code Work Product criteria using the applicable RAPID peer-review prompt, identify themselves, and record findings and the final review recommendation.
-- The team must review the Go/No-Go evidence, unresolved security findings, backout readiness, and demonstration plan before assigning a decision.
-- Two dependency warnings remain in the full test run: the Google GenAI deprecated alias and Google ADK experimental `PLUGGABLE_AUTH` warning.
-- Relative scores are case-specific decision aids, not probabilities or compliance results. Missing required score inputs remain unscored; stale/conflicting evidence may escalate.
-- The score is advisory only. Both required human roles must approve the same option and recommendation version before any operational action; this project does not execute that action.
+- Two dependency warnings remain: the Google GenAI deprecated alias and Google ADK experimental `PLUGGABLE_AUTH` warning.
+- Bandit reports seven low-severity `B101` assertion notices; no medium/high findings. These remain for qualified review.
+- The Operations ADK entry point rejects a missing or example-placeholder `GEMINI_API_KEY` before serving; provider authenticity cannot be checked without an authorized request.
+- Gitleaks found 250 signatures only in ignored `.venv` dependency sources; project-owned files and 39 commit-history entries had no leaks. Binary DOCX/PDF contents are not inspected and remain a manual review limitation.
+- The system is advisory and mock-backed. Live airline connectivity, production deployment, airworthiness, and operational readiness are not established.
+- Automated validation is complete. Controller demo rehearsal/delivery, qualified review, and team Go/No-Go deliberation remain pending.
 
-## Backout Plan
+## Whole-Workflow Backout
 
-1. Disable the recommendation-stage invocation in `ControllerWorkflow.run` and retain the existing validated `UnrankedHandoff` response.
-2. Return an explicit structured capability-unavailable or partial status; do not synthesize a ranked report or imply that recommendation processing succeeded.
-3. Keep the read-only specialist integrations, evidence, and compliance exclusions intact. Do not add or invoke operational write adapters during rollback.
-4. Run the focused Controller contract, compliance, workflow, ADK, and audit tests, then Ruff, mypy, formatting, and strict OpenSpec validation; retain the rollback results and update the evidence map.
-5. Re-enable ranked recommendations only after the regression is corrected and the same human-review and verification gates pass.
+1. Stop local demos or optional ADK processes and suspend use of affected recommendation output; do not perform an operational action.
+2. Record the affected revision and have the release owner select the prior known-good baseline. Revert the full readiness change as a reviewed unit while preserving unrelated worktree changes.
+3. Restore the paired runtime/dependency state (`pyproject.toml`, `uv.lock`, and `envsetuprequirements.txt`) from that baseline. Preserve audit records, case evidence, and failure status; do not enable write-capable tools.
+4. Present an explicit unavailable/partial advisory handoff with human approval pending. Do not fabricate a successful report or clear degraded evidence.
+5. Rebuild with `uv sync --locked --all-groups` and rerun pytest, Ruff check/format, mypy, focused security scans, and strict OpenSpec validation. Retain rollback evidence.
+6. Re-enable the workflow only after the regression is corrected and required human review is complete.
 
 ## Team Decision
 
 **Go/No-Go:** Pending team review.  
-**Rationale:** Automated verification is recorded above, but it does not replace qualified peer review, InfoSec/Reference Architecture review, sponsor communication, or the team's evidence-backed Go/No-Go decision.  
+**Rationale:** Automated checks are evidence only; they do not replace qualified peer review, security/architecture review, sponsor communication, or team deliberation.
 **Decision owner(s), conditions, and date:** To be completed by the team.

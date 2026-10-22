@@ -1,7 +1,7 @@
 # FDE US03 Capstone Project
 
 ## Project Overview
-This repository contains the design and proposal for an Aircraft-On-Ground (AOG) Recovery Coordinator built as an Agent-to-Agent (A2A) decision support system using Google ADK.
+This repository implements an advisory-only Aircraft-On-Ground (AOG) Recovery Coordinator with Controller, Maintenance, Materials & Logistics, and Operations agent workflows. Enterprise integrations are deterministic local/mock adapters; no live airline systems or operational write actions are enabled.
 
 The project focuses on helping airline operations teams respond to aircraft ground events faster, more consistently, and with clearer human oversight.
 
@@ -79,53 +79,85 @@ This project aims to:
 
 ## Development Setup
 
-The complete locked runtime and development package export, including hashes,
-is available in [envsetuprequirements.txt](envsetuprequirements.txt). It is
-generated from `uv.lock`; regenerate it after dependency changes with:
+The project supports Python 3.14.x (`requires-python` is `>=3.14,<3.15`) and
+uses `uv.lock` for reproducible runtime and development dependencies. The
+complete package export, including hashes, is available in
+[envsetuprequirements.txt](envsetuprequirements.txt). Regenerate it after
+dependency changes with:
 
 ```powershell
 uv export --locked --all-groups --format requirements-txt --no-emit-project --output-file envsetuprequirements.txt
 ```
 
-For the standard project environment, use `uv sync`; it reads dependencies from
-`pyproject.toml` and `uv.lock` rather than from the export file.
-
-The project requires Python 3.14 and uses `uv` to create an isolated environment
-and install the Google ADK, Pydantic, and development tools declared in
-`pyproject.toml`.
-
-From the repository root in PowerShell:
+From the repository root in PowerShell, install the locked runtime and all
+development tools, validate local configuration, and run the offline demo:
 
 ```powershell
-uv sync --all-groups --locked
+uv sync --locked --all-groups
 uv run python --version
+uv run python -c "from aog_recovery.config import AogSettings; settings = AogSettings(); print(f'configuration valid; adapter_mode={settings.adapter_mode.value}')"
+uv run python -m aog_recovery.operations.demo normal_repair --json
+```
+
+The default adapter mode is `local`; `AOG_*` settings have validated defaults.
+Run the deterministic tests and code checks with:
+
+```powershell
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 ```
 
-### Gemini API key
+### Optional ADK model configuration
 
-The local `.env` file is ignored by Git. Add your Google AI Studio key to its
-`GOOGLE_API_KEY` entry; do not commit or share this file. For a fresh checkout,
-copy `.env.example` to `.env` first. The project uses `GOOGLE_GENAI_USE_VERTEXAI=FALSE`
-for API-key authentication. To pass the key to a command, use:
+The offline demo and tests do not require a model credential. The optional
+model-backed ADK configuration uses the provider-specific variable names shown
+in `.env.example` (including `GEMINI_API_KEY` and `ADK_MODEL`). For a model-backed
+run, copy `.env.example` to `.env` and replace placeholders using the approved
+secret source for your environment. The `.env` file is ignored by Git; never
+commit it, put a real key in documentation or tests, or print it to logs.
+`OperationsSettings` treats `GEMINI_API_KEY` as secret-typed and excludes it
+from representations and serialization. The model-backed Operations ADK web
+entry point fails fast when the key is absent or still the example placeholder.
+This local check does not contact the provider; a non-placeholder key's
+authenticity remains unverified until an authorized model-backed request.
+
+To load the optional model configuration for a command:
 
 ```powershell
 uv run --env-file .env <command>
 ```
 
-VS Code Python terminals are configured to load `.env` when opened. Restart
-existing terminals after changing the file. Never paste the API key into source,
-tests, logs, or chat.
+The local readiness check does not require `.env`; a missing or invalid model
+credential must not be replaced with a fabricated value. Restart VS Code
+terminals after changing local environment configuration.
+
+### Startup and local readiness
+
+There is no always-on Controller web service or HTTP health endpoint in this
+capstone implementation. Run the Operations synthetic smoke demo with
+`uv run python -m aog_recovery.operations.demo`; it uses deterministic local
+adapters and makes no model, network, or operational calls. The configuration
+check and `uv run pytest` above are the local readiness checks. They verify the
+environment and mock workflows only; they do not prove live enterprise
+connectivity, production deployment readiness, airworthiness, or operational
+approval. The optional ADK web entry point under `adk_agents/operations_agent`
+is an Operations-only demonstration, not a deployed Controller service.
 
 VS Code is configured to use `.venv` and discover pytest tests. If its Python
 extension was already open when `.venv` was created, select the workspace
 interpreter at `.venv\Scripts\python.exe` or reload the window.
 
 ## Project Status
-This repository is currently in the proposal and architecture design phase for an enterprise AOG decision-support system.
+The four-agent advisory workflow and deterministic local/mock adapters are
+implemented, and automated readiness verification is recorded. Live enterprise
+integration and production deployment are out of scope; qualified peer review,
+team Go/No-Go, sponsor rehearsal/presentation, and all operational approvals
+remain human responsibilities.
 
 ## Summary
-This capstone project is not just an AI demo. It is a structured operational decision-support concept for airline recovery planning, designed to combine specialist reasoning, policy guardrails, and human oversight into a practical AOG workflow.
+This capstone implementation combines specialist analysis, deterministic
+compliance and ranking, evidence traceability, and a mandatory human decision
+gate in a reproducible local AOG workflow. It remains advisory and does not
+execute operational actions.

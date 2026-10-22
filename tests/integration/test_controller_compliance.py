@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -56,9 +56,11 @@ from aog_recovery.materials_logistics.models import (
 )
 from aog_recovery.operations.agent import OperationsAgent
 from aog_recovery.operations.models import (
+    AllocationPath,
     ImpactLevel,
     OperationsRequest,
     OptionKind,
+    PackageAllocation,
     PackageLoadData,
 )
 from aog_recovery.operations.synthetic import default_adapters
@@ -456,6 +458,50 @@ def test_high_confidence_handoff_still_requires_human_approval() -> None:
 
 def test_recommendation_stage_scores_only_compliance_eligible_options() -> None:
     case, authorized_result = build_result(AuthorizationStatus.AUTHORIZED)
+    operations_outcome = authorized_result.operations_result
+    assert operations_outcome is not None and operations_outcome.assessment is not None
+    operations_assessment = operations_outcome.assessment
+    recovery_option = operations_assessment.recovery_options[0]
+    redistributed_package = recovery_option.package.model_copy(
+        update={
+            "redistributed_count": 900,
+            "unprotected_count": 300,
+            "unprotected_time_critical_count": 0,
+            "allocations": (
+                PackageAllocation(
+                    group_id="FX103-PRIORITY",
+                    path=AllocationPath.SUBSTITUTE_AIRCRAFT,
+                    target_id="SPARE-900",
+                    carrier_name=None,
+                    departure_at=NOW.replace(hour=17, minute=0),
+                    count=700,
+                    cost_usd=0,
+                ),
+                PackageAllocation(
+                    group_id="FX103-STANDARD",
+                    path=AllocationPath.SUBSTITUTE_AIRCRAFT,
+                    target_id="SPARE-900",
+                    carrier_name=None,
+                    departure_at=NOW.replace(hour=17, minute=0),
+                    count=200,
+                    cost_usd=0,
+                ),
+            ),
+        }
+    )
+    recovery_option = recovery_option.model_copy(update={"package": redistributed_package})
+    operations_assessment = operations_assessment.model_copy(
+        update={"recovery_options": (recovery_option,)}
+    )
+    operations_result = operations_outcome.result.model_copy(
+        update={"role_payload": operations_assessment.model_dump(mode="json")}
+    )
+    operations_outcome = operations_outcome.model_copy(
+        update={"assessment": operations_assessment, "result": operations_result}
+    )
+    authorized_result = authorized_result.model_copy(
+        update={"operations_result": operations_outcome}
+    )
     _, unauthorized_result = build_result(AuthorizationStatus.UNAUTHORIZED)
     unauthorized_result = unauthorized_result.model_copy(
         update={
@@ -485,7 +531,15 @@ def test_recommendation_stage_scores_only_compliance_eligible_options() -> None:
     assert ranked.affected_routes == source_result.operations_result.assessment.affected_routes
     assert ranked.package.affected_package_count == 1200
     assert ranked.package.time_critical_package_count == 700
+    assert ranked.package.redistributed_count == 900
+    assert ranked.package.unprotected_count == 300
     assert ranked.package.allocations
+    assert ranked.package.allocations[0].group_id == "FX103-PRIORITY"
+    assert all(
+        allocation.departure_at is not None
+        and allocation.departure_at < NOW.replace(hour=17, minute=30)
+        for allocation in ranked.package.allocations
+    )
     assert ranked.maintenance_risk_metrics.delay_risk is MaintenanceRiskLevel.LOW
     assert ranked.evidence_references
     assert ranked.cost.total_usd == Decimal("225.00")
@@ -549,6 +603,82 @@ def test_decision_brief_close_scores_require_human_selection(
     assert "close-option-a" in brief.summary
     assert "close-option-b" in brief.summary
     assert "Select one close-scored option" in brief.required_human_action
+    assert brief.human_gate.status is HumanGateStatus.PENDING
+    assert all(option.selection_group == 1 for option in brief.ranked_options)
+    assert all(option.trade_off for option in brief.ranked_options)
+
+    def close_decision(
+        decision_id: str,
+        reviewer_role: ReviewerRole,
+        selected_option_id: str,
+    ) -> HumanDecisionRecord:
+        return HumanDecisionRecord(
+            schema_version="1.0",
+            decision_id=decision_id,
+            case_id=brief.case_id,
+            decision=HumanDecisionType.APPROVE,
+            selected_action="repair",
+            selected_option_id=selected_option_id,
+            reviewer_id=f"reviewer-{reviewer_role.value}",
+            reviewer_role=reviewer_role,
+            decided_at=NOW,
+            rationale="Synthetic close-score selection",
+            recommendation_version=brief.recommendation_version,
+        )
+
+    mismatched = apply_human_decisions(
+        brief,
+        (
+            close_decision("ops-close-a", ReviewerRole.OPS_LEAD, "close-option-a"),
+            close_decision(
+                "maintenance-close-b",
+                ReviewerRole.MAINTENANCE_AIRWORTHINESS,
+                "close-option-b",
+            ),
+        ),
+        audit_recorder=ControllerAuditRecorder(InMemoryControllerContextStore()),
+    )
+    assert mismatched.human_gate.status is HumanGateStatus.PENDING
+    assert any(
+        finding.code == "approval_scope_mismatch" for finding in mismatched.human_gate.findings
+    )
+
+    matching = apply_human_decisions(
+        brief,
+        (
+            close_decision("ops-close-match", ReviewerRole.OPS_LEAD, "close-option-a"),
+            close_decision(
+                "maintenance-close-match",
+                ReviewerRole.MAINTENANCE_AIRWORTHINESS,
+                "close-option-a",
+            ),
+        ),
+        audit_recorder=ControllerAuditRecorder(InMemoryControllerContextStore()),
+    )
+    assert matching.human_gate.status is HumanGateStatus.APPROVED
+    assert matching.status is RecommendationStatus.RESOLVED
+
+    just_over_factor_scores = close_factor_scores.model_copy(
+        update={
+            "speed": Decimal("87.99"),
+            "operational_package_impact": Decimal("87.99"),
+            "risk": Decimal("87.99"),
+            "cost": Decimal("87.99"),
+        }
+    )
+    just_over = close.model_copy(
+        update={"factor_scores": just_over_factor_scores, "aggregate_score": Decimal("87.99")}
+    )
+    monkeypatch.setattr(
+        recommendation_module,
+        "score_candidates",
+        lambda _case, _candidates: CandidateScoringResult((leading, just_over), ()),
+    )
+    just_over_brief = recommendation_module.build_recommendation(handoff)
+
+    assert not just_over_brief.requires_human_selection
+    assert all(option.selection_group is None for option in just_over_brief.ranked_options)
+    assert just_over_brief.ranked_options[0].option_id == "close-option-a"
 
 
 def test_recommendation_preserves_degradation_conflicts_and_zero_scoreable_status() -> None:
@@ -803,11 +933,21 @@ def test_scoring_keeps_missing_cost_and_unknown_risk_unscored(
 def test_cost_changes_score_only_through_its_weight_and_scoring_is_reproducible() -> None:
     case, base_result = build_result(AuthorizationStatus.AUTHORIZED)
 
-    def with_sourcing_cost(option_id: str, sourcing_cost: Decimal) -> PerCandidateResult:
+    def with_sourcing_cost(
+        option_id: str,
+        sourcing_cost: Decimal,
+        readiness_delay_hours: int = 0,
+    ) -> PerCandidateResult:
         source_option = base_result.candidate_source.sourcing_options[0].model_copy(
             update={"estimated_cost_usd": sourcing_cost}
         )
-        candidate = base_result.candidate.model_copy(update={"option_id": option_id})
+        candidate = base_result.candidate.model_copy(
+            update={
+                "option_id": option_id,
+                "readiness_eta": base_result.candidate.readiness_eta
+                + timedelta(hours=readiness_delay_hours),
+            }
+        )
         candidate_source = base_result.candidate_source.model_copy(
             update={"source_key": option_id, "sourcing_options": (source_option,)}
         )
@@ -851,7 +991,7 @@ def test_cost_changes_score_only_through_its_weight_and_scoring_is_reproducible(
     handoff = build_unranked_handoff(
         case,
         (
-            with_sourcing_cost("candidate-cheap", Decimal("100.00")),
+            with_sourcing_cost("candidate-cheap-slower", Decimal("100.00"), 4),
             with_sourcing_cost("candidate-expensive", Decimal("500.00")),
         ),
     )
@@ -864,14 +1004,20 @@ def test_cost_changes_score_only_through_its_weight_and_scoring_is_reproducible(
 
     assert len(scores) == 2
     assert first == repeated
-    assert scores["candidate-cheap"].factor_scores.cost == Decimal("100")
+    assert scores["candidate-cheap-slower"].factor_scores.speed == Decimal("0")
+    assert scores["candidate-expensive"].factor_scores.speed == Decimal("100")
+    assert scores["candidate-cheap-slower"].factor_scores.cost == Decimal("100")
     assert scores["candidate-expensive"].factor_scores.cost == Decimal("0")
-    assert scores["candidate-cheap"].aggregate_score - scores[
+    assert scores["candidate-expensive"].aggregate_score - scores[
+        "candidate-cheap-slower"
+    ].aggregate_score == Decimal("20.00")
+    assert scores["candidate-cheap-slower"].aggregate_score - scores[
         "candidate-expensive"
-    ].aggregate_score == Decimal("10.00")
-    assert report_options["candidate-cheap"].cost.total_usd == Decimal("225.00")
+    ].aggregate_score == Decimal("-20.00")
+    assert brief.ranked_options[0].option_id == "candidate-expensive"
+    assert report_options["candidate-cheap-slower"].cost.total_usd == Decimal("225.00")
     assert report_options["candidate-expensive"].cost.total_usd == Decimal("625.00")
-    assert "estimated USD 225.00" in report_options["candidate-cheap"].trade_off
+    assert "estimated USD 225.00" in report_options["candidate-cheap-slower"].trade_off
 
 
 def test_recommendation_audit_events_are_versioned_redacted_and_case_correlated() -> None:

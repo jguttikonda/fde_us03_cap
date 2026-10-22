@@ -79,13 +79,19 @@ def aggregate_candidate_result(
             errors,
             "maintenance",
         )
-    if candidate_result.materials_logistics_result is not None:
-        _validate_role_payload(
-            candidate_result.materials_logistics_result,
+    if (
+        candidate_result.materials_logistics_result is not None
+        and candidate_result.materials_logistics_result.status is not AgentResultStatus.FAILED
+    ):
+        materials_payload, materials_report = validate_contract_json(
             MaterialsLogisticsAgentPayload,
-            errors,
-            "materials_logistics",
+            candidate_result.materials_logistics_result.role_payload,
         )
+        if materials_payload is None:
+            errors.append(_validation_error("materials_logistics", len(materials_report.findings)))
+        else:
+            errors.extend(materials_payload.evidence_summary.errors)
+            warnings.extend(materials_payload.evidence_summary.warnings)
     if outcome is not None:
         validated_outcome, report = validate_contract_json(OperationsOutcome, outcome.model_dump())
         if validated_outcome is None:

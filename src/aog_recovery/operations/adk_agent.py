@@ -16,9 +16,14 @@ from aog_recovery.operations.settings import OperationsSettings
 
 
 def build_operations_adk_agent(
-    agent: OperationsAgent, settings: OperationsSettings | None = None
+    agent: OperationsAgent,
+    settings: OperationsSettings | None = None,
+    *,
+    require_model_credential: bool = True,
 ) -> LlmAgent:
     chosen = settings or OperationsSettings()
+    if require_model_credential:
+        chosen.require_model_credential()
 
     def assess_operational_impact(request: dict[str, Any]) -> dict[str, Any]:
         """Read-only deterministic Operations assessment for a validated request payload.

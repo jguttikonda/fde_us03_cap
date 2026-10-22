@@ -6,6 +6,7 @@ from aog_recovery.operations.adk_agent import build_operations_adk_agent
 from aog_recovery.operations.agent import OperationsAgent
 from aog_recovery.operations.models import OperationsOutcome
 from aog_recovery.operations.prompts import OPERATIONS_INSTRUCTION
+from aog_recovery.operations.settings import OperationsSettings
 from aog_recovery.operations.synthetic import SCENARIOS, default_adapters
 
 _DEMO_NOTE = """
@@ -36,6 +37,10 @@ def run_demo_scenario(name: str) -> dict[str, Any]:
     return outcome.result.model_dump(mode="json")
 
 
-root_agent = build_operations_adk_agent(OperationsAgent(default_adapters()))
+root_agent = build_operations_adk_agent(
+    OperationsAgent(default_adapters()),
+    OperationsSettings(),
+    require_model_credential=True,
+)
 root_agent.instruction = OPERATIONS_INSTRUCTION + _DEMO_NOTE
 root_agent.tools = [*root_agent.tools, list_demo_scenarios, run_demo_scenario]
