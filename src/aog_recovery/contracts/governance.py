@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import StringConstraints, field_validator
+from pydantic import StringConstraints, field_validator, model_validator
 
 from aog_recovery.contracts.base import ContractModel
 
@@ -40,3 +40,11 @@ class HumanDecisionRecord(ContractModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("timestamp must include a timezone")
         return value
+
+    @model_validator(mode="after")
+    def require_option_for_approval(self) -> HumanDecisionRecord:
+        if self.decision is HumanDecisionType.APPROVE and (
+            self.selected_action is None or self.selected_option_id is None
+        ):
+            raise ValueError("approval must identify its action and selected option")
+        return self

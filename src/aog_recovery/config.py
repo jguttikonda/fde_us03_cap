@@ -24,6 +24,8 @@ class AogSettings(BaseSettings):
     adapter_mode: AdapterMode = AdapterMode.LOCAL
     tool_timeout_seconds: Annotated[int, Field(ge=1, le=60)] = 10
     agent_timeout_seconds: Annotated[int, Field(ge=1, le=120)] = 30
+    operations_timeout_seconds: Annotated[int, Field(ge=1, le=120)] = 30
+    operations_max_workers: Annotated[int, Field(ge=1, le=16)] = 2
     preferred_confidence_threshold: Annotated[float, Field(ge=0.0, le=1.0)] = 0.70
     escalation_confidence_threshold: Annotated[float, Field(ge=0.0, le=1.0)] = 0.50
     operations_source_freshness_seconds: Annotated[int, Field(ge=1, le=86_400)] = 900

@@ -236,7 +236,7 @@ Use the following as the overall gate logic:
    - Can the team clearly explain and defend the outcome?
 
 ## Current Project Status
-At this point, the repo is primarily in the Proposal Drafting and OpenSpec preparation stages. Implementation, testing, RAPID deployment artifacts, and demo readiness still need to be completed before the capstone would meet the rubric expectations.
+The repository has implemented the advisory four-agent workflow with deterministic local/mock adapters and human approval boundaries. The Controller demo is available as an offline CLI and a local ADK Web root over four named synthetic scenarios; automated tests, coverage, static checks, strict OpenSpec validation, and project-owned Gitleaks scans are recorded. Qualified peer review, InfoSec/Reference Architecture assessment, team Go/No-Go, sponsor rehearsal/presentation, and operational approvals remain human responsibilities; no production or live-enterprise readiness is claimed.
 
 ## Documentation Reference
 - [proposal.md](proposal.md)

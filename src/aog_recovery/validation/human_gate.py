@@ -28,13 +28,9 @@ def assess_human_gate(
     decisions: tuple[HumanDecisionRecord, ...],
     case_id: str,
     recommendation_version: str,
-    requires_repair_or_part_approval: bool,
+    valid_option_ids: tuple[str, ...] | None = None,
 ) -> HumanGateAssessment:
-    required_roles = (
-        (ReviewerRole.OPS_LEAD, ReviewerRole.MAINTENANCE_AIRWORTHINESS)
-        if requires_repair_or_part_approval
-        else (ReviewerRole.OPS_LEAD,)
-    )
+    required_roles = (ReviewerRole.OPS_LEAD, ReviewerRole.MAINTENANCE_AIRWORTHINESS)
     matching_decisions: list[HumanDecisionRecord] = []
     findings: list[ValidationFinding] = []
 
@@ -53,6 +49,18 @@ def assess_human_gate(
                     field_path=f"decisions[{index}].recommendation_version",
                     code="stale_recommendation_version",
                     message="decision does not match the active recommendation version",
+                )
+            )
+        elif (
+            valid_option_ids is not None
+            and decision.selected_option_id is not None
+            and decision.selected_option_id not in valid_option_ids
+        ):
+            findings.append(
+                ValidationFinding(
+                    field_path=f"decisions[{index}].selected_option_id",
+                    code="unknown_selected_option",
+                    message="decision selects an option outside the active recommendation",
                 )
             )
         else:
@@ -96,7 +104,7 @@ def assess_human_gate(
             decision_scopes = {
                 (decision.selected_action, decision.selected_option_id) for decision in approvals
             }
-            missing_selection = requires_repair_or_part_approval and any(
+            missing_selection = any(
                 decision.selected_action is None or decision.selected_option_id is None
                 for decision in approvals
             )
@@ -105,7 +113,7 @@ def assess_human_gate(
                     ValidationFinding(
                         field_path="decisions",
                         code="missing_approval_selection",
-                        message="repair or part approval must identify its action and option",
+                        message="approval must identify its action and selected option",
                     )
                 )
                 status = HumanGateStatus.PENDING

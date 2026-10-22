@@ -15,6 +15,10 @@ TOOL_ROLE_ALLOWLIST: dict[ToolName, frozenset[AgentRole]] = {
         {AgentRole.CONTROLLER, AgentRole.MAINTENANCE, AgentRole.MATERIALS_LOGISTICS}
     ),
     ToolName.OPERATIONS_STATUS: frozenset({AgentRole.CONTROLLER, AgentRole.OPERATIONS}),
+    ToolName.FLIGHT_SCHEDULE: frozenset({AgentRole.CONTROLLER, AgentRole.OPERATIONS}),
+    ToolName.FLEET_AVAILABILITY: frozenset({AgentRole.CONTROLLER, AgentRole.OPERATIONS}),
+    ToolName.PACKAGE_LOAD: frozenset({AgentRole.CONTROLLER, AgentRole.OPERATIONS}),
+    ToolName.ALTERNATE_FLIGHTS: frozenset({AgentRole.CONTROLLER, AgentRole.OPERATIONS}),
 }
 
 

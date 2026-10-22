@@ -110,13 +110,12 @@ def test_foundation_preserves_degradation_and_requires_human_approval(
         ),
         case_id=valid_case.case_id,
         recommendation_version="recommendation-synthetic-v1",
-        requires_repair_or_part_approval=True,
+        valid_option_ids=("option-synthetic-001",),
     )
     pending_gate = assess_human_gate(
         decisions=(),
         case_id=valid_case.case_id,
         recommendation_version="recommendation-synthetic-v1",
-        requires_repair_or_part_approval=True,
     )
 
     assert gate.status is HumanGateStatus.APPROVED
