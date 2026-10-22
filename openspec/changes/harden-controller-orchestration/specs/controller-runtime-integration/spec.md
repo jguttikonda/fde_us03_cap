@@ -18,6 +18,10 @@ The Controller MUST translate each validated candidate request into inputs accep
 - **WHEN** a required specialist input cannot be mapped or its evidence reference does not resolve
 - **THEN** that specialist is not given a success-shaped request; the candidate result names the missing or invalid input and remains partial or escalated (ARD-DAT-009..010, ARD-GOV-005, ARD-RES-004)
 
+#### Scenario: H3/H4 recording fails
+- **WHEN** appending either peer-exchange record fails for a repair candidate
+- **THEN** the Controller preserves both specialist outcomes, marks the exchange missing, and keeps that candidate partial or escalated without affecting other candidates (ARD-CTL-005..006, ARD-RES-003..005/007)
+
 ### Requirement: Operations evaluation has a bounded deadline
 
 Each per-candidate Operations invocation MUST be bounded by configured timeout policy. A timeout MUST create a structured candidate-local failure, name Operations analysis as missing, and lower confidence or escalate without erasing other candidate results. (ARD-RES-002..005/007, ARD-NFR-001..002, ARD-CTL-008/018)
@@ -30,6 +34,10 @@ Each per-candidate Operations invocation MUST be bounded by configured timeout p
 - **WHEN** Operations returns a validated result before the deadline
 - **THEN** the Controller retains the per-candidate package, impact, cost, warnings, and evidence without changing Operations domain facts (ARD-CTL-006/018, ARD-OPS-005/009)
 
+#### Scenario: Timed-out synchronous work remains worker-bounded
+- **WHEN** a synchronous Operations worker continues after the Controller deadline
+- **THEN** the timed-out request returns candidate-local failure, its worker slot remains occupied until completion, and further work is rejected at the configured capacity rather than queued without bound (ARD-RES-002/005, ARD-NFR-001..002)
+
 ### Requirement: ADK response preserves the deterministic workflow contract
 
 The Controller ADK entry point MUST expose the versioned deterministic workflow result without substituting model-generated success for validation or specialist outcomes. The response MUST remain advisory, unranked, and pending human decision, with no operational action capability. (ARD-TEC-002/005, ARD-CTL-010/017..018, ARD-GOV-008, ARD-SEC-001..003)
@@ -41,6 +49,14 @@ The Controller ADK entry point MUST expose the versioned deterministic workflow 
 #### Scenario: Workflow validation or execution fails
 - **WHEN** deterministic workflow validation fails or its result cannot be validated
 - **THEN** the ADK boundary returns an explicit structured failure and does not replace it with a success-shaped narrative (ARD-DAT-008..010, ARD-RES-003/006)
+
+#### Scenario: Compliance exclusion and conflicting evidence remain visible
+- **WHEN** a candidate fails a deterministic compliance check or its evidence conflicts
+- **THEN** the handoff retains the exclusion reason or conflict and escalates as required without ranking the candidate (ARD-CTL-017..018, ARD-GOV-002..005)
+
+#### Scenario: Human approval remains pending
+- **WHEN** the Controller returns any valid handoff, including a high-confidence eligible candidate
+- **THEN** the response preserves the pending human gate and exposes no approval decision or operational action (ARD-GOV-006..008, ARD-PRN-001..002)
 
 ### Requirement: Concurrent Controller cases remain isolated
 

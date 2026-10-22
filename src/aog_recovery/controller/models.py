@@ -129,6 +129,8 @@ class CandidateSource(ContractModel):
     sourcing_options: tuple[SourcingOption, ...] = ()
     package_load: PackageLoadData | None = None
     package_load_evidence_references: tuple[NonEmptyString, ...] = ()
+    maintenance_assessment_input: dict[str, object] | None = None
+    materials_logistics_assessment_input: dict[str, object] | None = None
 
     @model_validator(mode="after")
     def require_package_load_provenance(self) -> CandidateSource:

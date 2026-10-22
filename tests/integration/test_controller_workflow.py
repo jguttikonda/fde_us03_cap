@@ -1,14 +1,26 @@
+import asyncio
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
+from threading import Event
+from types import SimpleNamespace
 
 import pytest
+from test_specialist_workflow import (
+    FakeMaintenanceRunner,
+    FakeMaterialsRunner,
+    maintenance_runner_outputs,
+    materials_runner_outputs,
+)
+from test_specialist_workflow import maintenance_input as specialist_maintenance_input
+from test_specialist_workflow import materials_input as specialist_materials_input
 
 from aog_recovery.config import AogSettings
 from aog_recovery.contracts.agent import AgentResult, AgentResultStatus, AgentRole
 from aog_recovery.contracts.evidence import Evidence, EvidenceValidity
 from aog_recovery.contracts.readiness import EtaBasis, ReadinessEstimate
 from aog_recovery.contracts.tool import ToolResultStatus
+from aog_recovery.controller.adk_agent import ControllerAdkResponse, build_controller_adk_agent
 from aog_recovery.controller.candidates import build_candidates
 from aog_recovery.controller.context import (
     ControllerAuditRecorder,
@@ -21,11 +33,21 @@ from aog_recovery.controller.models import (
     RoutingOmission,
     WorkflowStatus,
 )
+from aog_recovery.controller.operations_adapter import (
+    BoundedAsyncOperationsAdapter,
+    OperationsCapacityError,
+)
 from aog_recovery.controller.orchestration import CandidateSpecialistRequest
+from aog_recovery.controller.specialist_adapters import (
+    MaintenanceSpecialistAdapter,
+    MaterialsLogisticsSpecialistAdapter,
+)
 from aog_recovery.controller.workflow import ControllerWorkflow, ControllerWorkflowResult
+from aog_recovery.maintenance.agent import MaintenanceAgent
 from aog_recovery.maintenance.models import (
     ApprovalEvidenceStatus,
     EngineeringApprovalEvidence,
+    MaintenanceAssessmentInput,
     MaintenanceAssessmentPayload,
     MaintenanceRecommendation,
     MaintenanceRecommendationDecision,
@@ -33,7 +55,11 @@ from aog_recovery.maintenance.models import (
     MaintenanceRiskMetrics,
     RepairabilityStatus,
 )
-from aog_recovery.materials_logistics.agent import MaterialsLogisticsAgentPayload
+from aog_recovery.materials_logistics.agent import (
+    MaterialsLogisticsAgent,
+    MaterialsLogisticsAgentPayload,
+    MaterialsLogisticsAssessmentInput,
+)
 from aog_recovery.materials_logistics.models import (
     AuthorizationStatus,
     AvailabilityStatus,
@@ -53,6 +79,7 @@ from aog_recovery.operations.models import (
     PackageLoadData,
 )
 from aog_recovery.operations.synthetic import default_adapters, default_case
+from aog_recovery.validation.confidence import ConfidenceDisposition
 
 NOW = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
 
@@ -65,11 +92,14 @@ class FakeSpecialist:
     ) -> None:
         self.role = role
         self.fail_kinds = fail_kinds
+        self.fail_case_id: str | None = None
         self.calls: list[CandidateSpecialistRequest] = []
 
     async def assess(self, request: CandidateSpecialistRequest) -> AgentResult:
         self.calls.append(request)
-        if request.candidate.candidate.kind in self.fail_kinds:
+        if request.candidate.candidate.kind in self.fail_kinds and (
+            self.fail_case_id is None or request.case.case_id == self.fail_case_id
+        ):
             error = {
                 "schema_version": "1.0",
                 "category": "synthetic_specialist_failure",
@@ -111,7 +141,7 @@ class FakeOperations:
         self.timeout_kinds = timeout_kinds
         self.calls: list[OperationsRequest] = []
 
-    def assess(self, request: OperationsRequest) -> OperationsOutcome:
+    async def assess(self, request: OperationsRequest) -> OperationsOutcome:
         self.calls.append(request)
         if request.candidates[0].kind in self.timeout_kinds:
             raise TimeoutError("synthetic Operations timeout")
@@ -340,6 +370,549 @@ def create_workflow(
         clock=lambda: NOW,
     )
     return workflow, maintenance, materials, operations, chosen_store
+
+
+@pytest.mark.asyncio
+async def test_async_operations_adapter_preserves_deterministic_outcome() -> None:
+    intake = ControllerIntake.model_validate_json(json.dumps(make_intake_payload()))
+    candidate = build_candidates(intake)[0].candidate
+    request = OperationsRequest(
+        schema_version="1.0",
+        request_id=f"{candidate.option_id}:operations",
+        case=intake.case,
+        affected_flight_numbers=intake.affected_flight_numbers,
+        candidates=(candidate,),
+        evaluated_at=NOW,
+        reroute_policy=intake.reroute_policy,
+        reserved_capacity=intake.reserved_capacity,
+    )
+    agent = OperationsAgent(default_adapters())
+    expected = agent.assess(request)
+
+    result = await BoundedAsyncOperationsAdapter(
+        agent,
+        AogSettings(operations_timeout_seconds=5),
+    ).assess(request)
+
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_adk_agent_binds_versioned_workflow_response_without_model_call() -> None:
+    workflow, _, _, _, _ = create_workflow()
+    agent = build_controller_adk_agent(workflow, model_name="test-model")
+
+    assert agent.output_schema is ControllerAdkResponse
+    assert agent.name == "controller_agent"
+    assert len(agent.tools) == 1
+    tool_context = SimpleNamespace(actions=SimpleNamespace(skip_summarization=False))
+    tool_result = await agent.tools[0](make_intake_payload(), tool_context)
+    response = ControllerAdkResponse.model_validate_json(json.dumps(tool_result))
+
+    assert response.schema_version == "1.0"
+    assert response.status == "complete"
+    assert response.workflow is not None
+    assert response.workflow.handoff is not None
+    assert response.workflow.handoff.human_gate.status.value == "pending"
+    assert tool_context.actions.skip_summarization
+
+
+@pytest.mark.asyncio
+async def test_adk_boundary_returns_explicit_failure_for_invalid_workflow_output() -> None:
+    class InvalidWorkflow:
+        async def run(self, payload: object) -> object:
+            return {"status": "success", "recommended_winner": "untrusted"}
+
+    agent = build_controller_adk_agent(InvalidWorkflow(), model_name="test-model")  # type: ignore[arg-type]
+    tool_context = SimpleNamespace(actions=SimpleNamespace(skip_summarization=False))
+
+    result = await agent.tools[0](make_intake_payload(), tool_context)
+    response = ControllerAdkResponse.model_validate_json(json.dumps(result))
+
+    assert response.status == "failed"
+    assert response.workflow is None
+    assert response.failure is not None
+    assert response.failure.category == "controller_workflow_output_invalid"
+    assert "recommended_winner" not in json.dumps(result)
+    assert tool_context.actions.skip_summarization
+
+
+@pytest.mark.asyncio
+async def test_adk_boundary_returns_explicit_failure_for_workflow_exception() -> None:
+    class RaisingWorkflow:
+        async def run(self, payload: object) -> object:
+            raise RuntimeError("synthetic workflow failure")
+
+    agent = build_controller_adk_agent(RaisingWorkflow(), model_name="test-model")  # type: ignore[arg-type]
+    tool_context = SimpleNamespace(actions=SimpleNamespace(skip_summarization=False))
+
+    result = await agent.tools[0](make_intake_payload(), tool_context)
+    response = ControllerAdkResponse.model_validate_json(json.dumps(result))
+
+    assert response.status == "failed"
+    assert response.workflow is None
+    assert response.failure is not None
+    assert response.failure.category == "controller_workflow_failed"
+    assert "synthetic workflow failure" not in json.dumps(result)
+    assert tool_context.actions.skip_summarization
+
+
+@pytest.mark.asyncio
+async def test_adk_boundary_keeps_untrusted_intake_invalid_without_fallback() -> None:
+    workflow, maintenance, materials, operations, _ = create_workflow()
+    agent = build_controller_adk_agent(workflow, model_name="test-model")
+    payload = make_intake_payload()
+    payload["execute_transfer"] = True
+    tool_context = SimpleNamespace(actions=SimpleNamespace(skip_summarization=False))
+
+    result = await agent.tools[0](payload, tool_context)
+    response = ControllerAdkResponse.model_validate_json(json.dumps(result))
+
+    assert response.status == "complete"
+    assert response.workflow is not None
+    assert not response.workflow.intake.validation.is_valid
+    assert response.workflow.handoff is None
+    assert maintenance.calls == []
+    assert materials.calls == []
+    assert operations.calls == []
+    assert tool_context.actions.skip_summarization
+    schema = ControllerAdkResponse.model_json_schema()
+    schema_properties: set[str] = set()
+
+    def collect_properties(value: object) -> None:
+        if not isinstance(value, dict):
+            return
+        properties = value.get("properties")
+        if isinstance(properties, dict):
+            schema_properties.update(properties)
+            for child in properties.values():
+                collect_properties(child)
+        definitions = value.get("$defs")
+        if isinstance(definitions, dict):
+            for definition in definitions.values():
+                collect_properties(definition)
+
+    collect_properties(schema)
+    assert schema_properties.isdisjoint(
+        {
+            "score",
+            "rank",
+            "recommended_winner",
+            "approval",
+            "action",
+            "execute",
+            "execute_transfer",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_workflows_isolate_case_results_and_context_events() -> None:
+    case_a_id = "AOG-CONCURRENT-A"
+    case_b_id = "AOG-CONCURRENT-B"
+    trace_a = {"trace_id": "trace-concurrent-a", "correlation_id": "corr-concurrent-a"}
+    trace_b = {"trace_id": "trace-concurrent-b", "correlation_id": "corr-concurrent-b"}
+    payload_a = make_intake_payload()
+    payload_b = make_intake_payload()
+    payload_a["case"]["case_id"] = case_a_id
+    payload_a["case"]["trace_context"] = trace_a
+    payload_b["case"]["case_id"] = case_b_id
+    payload_b["case"]["trace_context"] = trace_b
+    store = InMemoryControllerContextStore()
+    settings = AogSettings(agent_timeout_seconds=1)
+
+    class GatedSpecialist(FakeSpecialist):
+        def __init__(
+            self,
+            role: AgentRole,
+            fail_kinds: frozenset[OptionKind] = frozenset(),
+        ) -> None:
+            super().__init__(role, fail_kinds)
+            self.started_cases: set[str] = set()
+            self.both_cases_started = asyncio.Event()
+
+        async def assess(self, request: CandidateSpecialistRequest) -> AgentResult:
+            self.started_cases.add(request.case.case_id)
+            if len(self.started_cases) == 2:
+                self.both_cases_started.set()
+            await self.both_cases_started.wait()
+            return await super().assess(request)
+
+    maintenance = GatedSpecialist(
+        AgentRole.MAINTENANCE,
+        frozenset({OptionKind.SWAP}),
+    )
+    maintenance.fail_case_id = case_a_id
+    materials = GatedSpecialist(AgentRole.MATERIALS_LOGISTICS)
+    operations = FakeOperations()
+    recorder = ControllerCaseContextRecorder(store)
+    audit = ControllerAuditRecorder(store)
+
+    def make_case_workflow() -> ControllerWorkflow:
+        return ControllerWorkflow(
+            maintenance,
+            materials,
+            operations,
+            recorder,
+            settings=settings,
+            audit_recorder=audit,
+            clock=lambda: NOW,
+        )
+
+    workflow_a = make_case_workflow()
+    workflow_b = make_case_workflow()
+    result_a, result_b = await asyncio.gather(
+        workflow_a.run(payload_a),
+        workflow_b.run(payload_b),
+    )
+
+    assert result_a.handoff is not None
+    assert result_b.handoff is not None
+    assert result_a.handoff.case.case_id == case_a_id
+    assert result_b.handoff.case.case_id == case_b_id
+    assert result_a.handoff.case.trace_context.trace_id == trace_a["trace_id"]
+    assert result_b.handoff.case.trace_context.trace_id == trace_b["trace_id"]
+
+    candidates_a = {item.result.candidate.kind: item.result for item in result_a.handoff.candidates}
+    candidates_b = {item.result.candidate.kind: item.result for item in result_b.handoff.candidates}
+    assert candidates_a[OptionKind.SWAP].maintenance_result.status is AgentResultStatus.FAILED
+    assert all(
+        item.maintenance_result.status is AgentResultStatus.COMPLETE
+        for item in candidates_b.values()
+    )
+    assert all(item.candidate.option_id.startswith(case_a_id) for item in candidates_a.values())
+    assert all(item.candidate.option_id.startswith(case_b_id) for item in candidates_b.values())
+
+    events_a = tuple(event for event in store.events if event.case_id == case_a_id)
+    events_b = tuple(event for event in store.events if event.case_id == case_b_id)
+    assert events_a and events_b
+    assert all(event.trace_context.trace_id == trace_a["trace_id"] for event in events_a)
+    assert all(event.trace_context.trace_id == trace_b["trace_id"] for event in events_b)
+    assert all(case_a_id in str(event.details.get("candidate_id", case_a_id)) for event in events_a)
+    assert all(case_b_id in str(event.details.get("candidate_id", case_b_id)) for event in events_b)
+    assert all(
+        item.result.status is not WorkflowStatus.FAILED for item in result_b.handoff.candidates
+    )
+
+
+@pytest.mark.asyncio
+async def test_operations_timeout_is_bounded_visible_and_candidate_local() -> None:
+    payload = make_intake_payload()
+    intake = ControllerIntake.model_validate_json(json.dumps(payload))
+    store = InMemoryControllerContextStore()
+    settings = AogSettings(
+        agent_timeout_seconds=1,
+        operations_timeout_seconds=1,
+        operations_max_workers=1,
+    )
+
+    class WaitingOperationsAgent:
+        def __init__(self) -> None:
+            self.agent = OperationsAgent(default_adapters())
+            self.started = Event()
+            self.release = Event()
+            self.finished = Event()
+
+        def assess(self, request: OperationsRequest) -> OperationsOutcome:
+            is_delayed = request.candidates[0].kind is OptionKind.DELAY
+            if is_delayed:
+                self.started.set()
+                self.release.wait()
+            try:
+                return self.agent.assess(request)
+            finally:
+                if is_delayed:
+                    self.finished.set()
+
+    waiting_agent = WaitingOperationsAgent()
+    operations = BoundedAsyncOperationsAdapter(waiting_agent, settings)
+    workflow = ControllerWorkflow(
+        FakeSpecialist(AgentRole.MAINTENANCE),
+        FakeSpecialist(AgentRole.MATERIALS_LOGISTICS),
+        operations,
+        ControllerCaseContextRecorder(store),
+        settings=settings,
+        audit_recorder=ControllerAuditRecorder(store),
+        clock=lambda: NOW,
+    )
+
+    try:
+        result = await workflow.run(payload)
+        assert waiting_agent.started.is_set()
+        assert not waiting_agent.finished.is_set()
+        assert result.handoff is not None
+        by_kind = {item.result.candidate.kind: item for item in result.handoff.candidates}
+        delay = by_kind[OptionKind.DELAY].result
+        timeout_error = next(
+            error for error in delay.errors if error.category == "operations_timeout"
+        )
+        timeout_event = next(
+            event for event in store.events if event.event_type == "operations_timeout"
+        )
+
+        assert delay.operations_result is None
+        assert "operations_analysis" in delay.missing_data
+        assert delay.confidence is not None
+        assert delay.confidence.confidence <= 0.49
+        assert delay.confidence.disposition is ConfidenceDisposition.ESCALATION_REQUIRED
+        assert delay.candidate.option_id in timeout_error.message
+        assert f"{delay.candidate.option_id}:operations" in timeout_error.message
+        assert timeout_event.event_id == f"{delay.candidate.option_id}:operations:failed"
+        assert timeout_event.trace_context == intake.case.trace_context
+        assert timeout_event.details["candidate_id"] == delay.candidate.option_id
+        assert timeout_event.details["timeout_seconds"] == 1
+        retry_request = OperationsRequest(
+            schema_version="1.0",
+            request_id=f"{delay.candidate.option_id}:retry",
+            case=intake.case,
+            affected_flight_numbers=intake.affected_flight_numbers,
+            candidates=(delay.candidate,),
+            evaluated_at=NOW,
+            reroute_policy=intake.reroute_policy,
+            reserved_capacity=intake.reserved_capacity,
+        )
+        with pytest.raises(OperationsCapacityError):
+            await operations.assess(retry_request)
+        assert all(
+            item.result.operations_result is not None
+            and not any(error.category == "operations_timeout" for error in item.result.errors)
+            for kind, item in by_kind.items()
+            if kind is not OptionKind.DELAY
+        )
+        assert result.handoff.human_gate.status.value == "pending"
+    finally:
+        waiting_agent.release.set()
+        assert waiting_agent.finished.wait(timeout=2)
+
+
+@pytest.mark.asyncio
+async def test_specialist_adapters_preserve_candidate_domain_inputs() -> None:
+    payload = make_intake_payload()
+    case = default_case()
+    base_maintenance_input = specialist_maintenance_input()
+    maintenance_input = base_maintenance_input.model_copy(
+        update={
+            "case": case,
+            "aircraft_metadata": base_maintenance_input.aircraft_metadata.model_copy(
+                update={"content": {"aircraft_id": case.aircraft_id}}
+            ),
+            "work_order": base_maintenance_input.work_order.model_copy(
+                update={"aircraft_id": case.aircraft_id}
+            ),
+            "maintenance_history": tuple(
+                item.model_copy(update={"content": {"state": "synthetic"}})
+                for item in base_maintenance_input.maintenance_history
+            ),
+        }
+    )
+    materials_input = specialist_materials_input().model_copy(update={"case": case})
+    source = payload["candidate_sources"][0]
+    source["maintenance_assessment_input"] = maintenance_input.model_dump(mode="json")
+    source["materials_logistics_assessment_input"] = materials_input.model_dump(mode="json")
+
+    evidence_references = {
+        item.evidence_id
+        for item in (
+            maintenance_input.aircraft_metadata,
+            maintenance_input.work_order.evidence,
+            *maintenance_input.maintenance_history,
+            *maintenance_input.engineering_constraints,
+            *maintenance_input.safety_conditions,
+        )
+        if item is not None
+    }
+    evidence_references.update(
+        reference
+        for reference in (
+            maintenance_input.need_by_evidence_reference,
+            maintenance_input.parts_readiness_evidence_reference,
+        )
+        if reference is not None
+    )
+    evidence_references.update(materials_input.evidence_summary.evidence_references)
+    evidence_references.update(
+        item.claim_reference for item in materials_input.assessment.part_availability
+    )
+    evidence_references.update(
+        reference
+        for item in materials_input.assessment.part_eligibility
+        for reference in item.evidence_references
+    )
+    evidence_references.update(
+        reference
+        for option in materials_input.assessment.sourcing_options
+        for reference in option.evidence_references
+    )
+    payload["evidence"].extend(
+        Evidence(
+            evidence_id=reference,
+            source="synthetic-specialist-source",
+            retrieved_at=NOW,
+            validity_state=EvidenceValidity.CURRENT,
+            claim_reference=f"claim-{reference}",
+            content={"state": "synthetic"},
+        ).model_dump(mode="json")
+        for reference in evidence_references
+        if reference != "evidence-controller-001"
+    )
+
+    intake = ControllerIntake.model_validate_json(json.dumps(payload))
+    candidate = build_candidates(intake)[0]
+    request = CandidateSpecialistRequest(
+        schema_version="1.0",
+        request_id=f"{candidate.candidate.option_id}:maintenance",
+        case=intake.case,
+        candidate=candidate,
+        available_evidence_ids=tuple(item.evidence_id for item in intake.evidence),
+    )
+    maintenance_outputs = list(maintenance_runner_outputs(maintenance_input))
+    maintenance_outputs[-1] = maintenance_outputs[-1].model_copy(update={"recurring_failure": None})
+    maintenance_runner = FakeMaintenanceRunner(tuple(maintenance_outputs))
+    materials_runner = FakeMaterialsRunner(materials_runner_outputs(materials_input))
+
+    maintenance_result = await MaintenanceSpecialistAdapter(
+        MaintenanceAgent(maintenance_runner)
+    ).assess(request)
+    materials_result = await MaterialsLogisticsSpecialistAdapter(
+        MaterialsLogisticsAgent(materials_runner)
+    ).assess(request)
+
+    assert maintenance_result.status is AgentResultStatus.COMPLETE
+    assert materials_result.status is AgentResultStatus.COMPLETE
+    assert request.request_id.startswith(candidate.candidate.option_id)
+    assert maintenance_runner.payloads[0]["case"]["case_id"] == case.case_id
+    assert maintenance_runner.payloads[0]["need_by_evidence_reference"] == (
+        maintenance_input.need_by_evidence_reference
+    )
+    assert maintenance_runner.payloads[0]["parts_readiness"]["evidence_reference"] == (
+        maintenance_input.parts_readiness_evidence_reference
+    )
+    assert materials_runner.payloads[0]["case"]["case_id"] == case.case_id
+    assert materials_runner.payloads[0]["assessment"]["sourcing_options"][0]["part_number"] == (
+        materials_input.assessment.sourcing_options[0].part_number
+    )
+    assert materials_runner.payloads[0]["evidence_summary"]["evidence_references"] == list(
+        materials_input.evidence_summary.evidence_references
+    )
+
+
+@pytest.mark.asyncio
+async def test_specialist_adapters_keep_invalid_inputs_candidate_local() -> None:
+    payload = make_intake_payload()
+    case = default_case()
+    maintenance_input = MaintenanceAssessmentInput(
+        schema_version="1.0",
+        case=case,
+        need_by_time=None,
+        need_by_evidence_reference=None,
+        parts_ready_at=None,
+        parts_readiness_evidence_reference=None,
+        aircraft_metadata=None,
+        work_order=None,
+        maintenance_history=(),
+        engineering_constraints=(),
+        safety_conditions=(),
+        part_dependencies=(),
+        missing_data=("maintenance_history",),
+    )
+    materials_input = MaterialsLogisticsAssessmentInput(
+        schema_version="1.0",
+        case=case,
+        assessment=MaterialsLogisticsAssessmentPayload(
+            schema_version="1.0",
+            availability_status=AvailabilityStatus.UNCERTAIN,
+            part_availability=(),
+            part_eligibility=(),
+            sourcing_options=(),
+            confidence=0.5,
+            risk_factors=(),
+            assumptions=(),
+            missing_data=("inventory",),
+        ),
+        evidence_summary=MaterialsEvidenceSummary(
+            status=ToolResultStatus.PARTIAL,
+            confidence=0.5,
+            evidence_references=(),
+            warnings=(),
+            errors=(),
+        ),
+    )
+    payload["candidate_sources"][0]["maintenance_assessment_input"] = maintenance_input.model_dump(
+        mode="json"
+    )
+    payload["candidate_sources"][0]["materials_logistics_assessment_input"] = (
+        materials_input.model_dump(mode="json")
+    )
+    payload["candidate_sources"][1]["maintenance_assessment_input"] = {"schema_version": "9.0"}
+    payload["candidate_sources"][1]["materials_logistics_assessment_input"] = (
+        materials_input.model_copy(
+            update={
+                "evidence_summary": materials_input.evidence_summary.model_copy(
+                    update={"evidence_references": ("missing-materials-evidence",)}
+                )
+            }
+        ).model_dump(mode="json")
+    )
+
+    intake = ControllerIntake.model_validate_json(json.dumps(payload))
+    candidates = build_candidates(intake)[:2]
+    requests = tuple(
+        CandidateSpecialistRequest(
+            schema_version="1.0",
+            request_id=f"{candidate.candidate.option_id}:maintenance",
+            case=intake.case,
+            candidate=candidate,
+            available_evidence_ids=tuple(item.evidence_id for item in intake.evidence),
+        )
+        for candidate in candidates
+    )
+    materials_requests = tuple(
+        request.model_copy(
+            update={"request_id": f"{request.candidate.candidate.option_id}:materials"}
+        )
+        for request in requests
+    )
+
+    class RecordingAgent:
+        def __init__(self, role: AgentRole) -> None:
+            self.role = role
+            self.calls: list[object] = []
+
+        async def assess(self, specialist_input: object) -> AgentResult:
+            self.calls.append(specialist_input)
+            return AgentResult(
+                schema_version="1.0",
+                agent_role=self.role,
+                status=AgentResultStatus.COMPLETE,
+                summary=f"Synthetic {self.role.value} result",
+                confidence=0.8,
+                assumptions=(),
+                evidence_references=(),
+                role_payload={},
+            )
+
+    maintenance_agent = RecordingAgent(AgentRole.MAINTENANCE)
+    materials_agent = RecordingAgent(AgentRole.MATERIALS_LOGISTICS)
+    maintenance_adapter = MaintenanceSpecialistAdapter(maintenance_agent)
+    materials_adapter = MaterialsLogisticsSpecialistAdapter(materials_agent)
+
+    maintenance_results = tuple([await maintenance_adapter.assess(request) for request in requests])
+    materials_results = tuple(
+        [await materials_adapter.assess(request) for request in materials_requests]
+    )
+
+    assert maintenance_results[0].status is AgentResultStatus.COMPLETE
+    assert maintenance_results[1].status is AgentResultStatus.FAILED
+    assert maintenance_results[1].role_payload["error"]["category"] == "maintenance_input_invalid"
+    assert materials_results[0].status is AgentResultStatus.COMPLETE
+    assert materials_results[1].status is AgentResultStatus.FAILED
+    assert materials_results[1].role_payload["error"]["category"] == (
+        "materials_evidence_unresolved"
+    )
+    assert len(maintenance_agent.calls) == 1
+    assert isinstance(maintenance_agent.calls[0], MaintenanceAssessmentInput)
+    assert len(materials_agent.calls) == 1
+    assert isinstance(materials_agent.calls[0], MaterialsLogisticsAssessmentInput)
 
 
 @pytest.mark.asyncio

@@ -278,7 +278,7 @@ class RecordingOperationsPort:
         self.agent = OperationsAgent(default_adapters())
         self.requests: list[OperationsRequest] = []
 
-    def assess(self, request: OperationsRequest) -> OperationsOutcome:
+    async def assess(self, request: OperationsRequest) -> OperationsOutcome:
         self.requests.append(request)
         return self.agent.assess(request)
 
@@ -394,7 +394,8 @@ async def test_timeout_is_visible_and_does_not_erase_another_candidate(
     )
 
 
-def test_operations_runs_once_per_candidate_and_retains_domain_outcomes(
+@pytest.mark.asyncio
+async def test_operations_runs_once_per_candidate_and_retains_domain_outcomes(
     current_evidence: Evidence,
 ) -> None:
     case = default_case()
@@ -429,7 +430,7 @@ def test_operations_runs_once_per_candidate_and_retains_domain_outcomes(
     operations = RecordingOperationsPort()
     audit_store = InMemoryControllerContextStore()
 
-    results = assess_operations_candidates(
+    results = await assess_operations_candidates(
         intake,
         initial_results,
         operations,

@@ -85,7 +85,7 @@ class ControllerWorkflow:
             clock=self._clock,
             audit_recorder=self._audit_recorder,
         )
-        operations_results = assess_operations_candidates(
+        operations_results = await assess_operations_candidates(
             intake_result.intake,
             specialist_results,
             self._operations,

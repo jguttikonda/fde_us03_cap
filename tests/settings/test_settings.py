@@ -8,12 +8,16 @@ def test_settings_load_valid_environment_values(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("AOG_ADAPTER_MODE", "local")
     monkeypatch.setenv("AOG_TOOL_TIMEOUT_SECONDS", "15")
     monkeypatch.setenv("AOG_AGENT_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("AOG_OPERATIONS_TIMEOUT_SECONDS", "20")
+    monkeypatch.setenv("AOG_OPERATIONS_MAX_WORKERS", "3")
 
     settings = AogSettings(_env_file=None)
 
     assert settings.adapter_mode is AdapterMode.LOCAL
     assert settings.tool_timeout_seconds == 15
     assert settings.agent_timeout_seconds == 45
+    assert settings.operations_timeout_seconds == 20
+    assert settings.operations_max_workers == 3
 
 
 @pytest.mark.parametrize(
@@ -22,6 +26,8 @@ def test_settings_load_valid_environment_values(monkeypatch: pytest.MonkeyPatch)
         ("AOG_ADAPTER_MODE", "enterprise"),
         ("AOG_TOOL_TIMEOUT_SECONDS", "0"),
         ("AOG_AGENT_TIMEOUT_SECONDS", "121"),
+        ("AOG_OPERATIONS_TIMEOUT_SECONDS", "0"),
+        ("AOG_OPERATIONS_MAX_WORKERS", "17"),
         ("AOG_ESCALATION_CONFIDENCE_THRESHOLD", "0.8"),
     ],
 )

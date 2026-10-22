@@ -75,6 +75,7 @@ class FakeMaintenanceRunner:
     def __init__(self, outputs: tuple[BaseModel, ...]) -> None:
         self.outputs = list(outputs)
         self.stages: list[MaintenancePromptStage] = []
+        self.payloads: list[Mapping[str, object]] = []
 
     async def run_stage(
         self,
@@ -82,6 +83,7 @@ class FakeMaintenanceRunner:
         payload: Mapping[str, object],
     ) -> BaseModel | Mapping[str, object]:
         self.stages.append(stage)
+        self.payloads.append(payload)
         return self.outputs.pop(0)
 
 
@@ -89,6 +91,7 @@ class FakeMaterialsRunner:
     def __init__(self, outputs: tuple[BaseModel, ...]) -> None:
         self.outputs = list(outputs)
         self.stages: list[MaterialsPromptStage] = []
+        self.payloads: list[Mapping[str, object]] = []
 
     async def run_stage(
         self,
@@ -96,6 +99,7 @@ class FakeMaterialsRunner:
         payload: Mapping[str, object],
     ) -> BaseModel | Mapping[str, object]:
         self.stages.append(stage)
+        self.payloads.append(payload)
         return self.outputs.pop(0)
 
 

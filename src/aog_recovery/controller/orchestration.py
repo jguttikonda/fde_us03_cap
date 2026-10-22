@@ -38,6 +38,7 @@ class CandidateSpecialistRequest(ContractModel):
     request_id: NonEmptyString
     case: AogCase
     candidate: CandidateDefinition
+    available_evidence_ids: tuple[NonEmptyString, ...]
 
 
 class SpecialistAssessmentPort(Protocol):
@@ -45,7 +46,7 @@ class SpecialistAssessmentPort(Protocol):
 
 
 class OperationsAssessmentPort(Protocol):
-    def assess(self, request: OperationsRequest) -> OperationsOutcome: ...
+    async def assess(self, request: OperationsRequest) -> OperationsOutcome: ...
 
 
 async def assess_candidate_specialists(
@@ -70,12 +71,14 @@ async def assess_candidate_specialists(
             request_id=f"{candidate.candidate.option_id}:maintenance",
             case=intake.case,
             candidate=candidate,
+            available_evidence_ids=tuple(item.evidence_id for item in intake.evidence),
         )
         materials_request = CandidateSpecialistRequest(
             schema_version="1.0",
             request_id=f"{candidate.candidate.option_id}:materials-logistics",
             case=intake.case,
             candidate=candidate,
+            available_evidence_ids=tuple(item.evidence_id for item in intake.evidence),
         )
         audit_errors: list[StructuredError] = []
         routing_warnings: list[EvidenceWarning] = []
@@ -226,7 +229,7 @@ async def assess_candidate_specialists(
     return tuple(results)
 
 
-def assess_operations_candidates(
+async def assess_operations_candidates(
     intake: ControllerIntake,
     candidate_results: tuple[PerCandidateResult, ...],
     operations: OperationsAssessmentPort,
@@ -303,7 +306,7 @@ def assess_operations_candidates(
             if audit_error is not None:
                 errors.append(audit_error)
         try:
-            outcome = operations.assess(request)
+            outcome = await operations.assess(request)
             if not isinstance(outcome, OperationsOutcome):
                 raise TypeError("Operations boundary returned a non-OperationsOutcome value")
             if outcome.result.agent_role is not AgentRole.OPERATIONS:
@@ -315,13 +318,21 @@ def assess_operations_candidates(
                 raise ValueError("Operations outcome contains another candidate's assessment")
         except Exception as error:
             timed_out = isinstance(error, TimeoutError)
+            timeout_seconds = getattr(error, "timeout_seconds", None)
+            timeout_detail = f" after {timeout_seconds} seconds" if timeout_seconds else ""
             invocation_error = _operations_error(
                 "operations_timeout" if timed_out else "operations_invocation_failed",
-                "Operations assessment timed out"
+                f"Operations assessment timed out{timeout_detail} for candidate "
+                f"{candidate.option_id} request {request.request_id}"
                 if timed_out
-                else f"Operations assessment failed ({type(error).__name__})",
+                else (
+                    f"Operations assessment failed for candidate {candidate.option_id} "
+                    f"request {request.request_id} ({type(error).__name__})"
+                ),
             )
             errors.append(invocation_error)
+            if timed_out:
+                missing_data.append("operations_analysis")
             if audit_recorder is not None:
                 audit_error = audit_recorder.record(
                     event_id=f"{request.request_id}:failed",
@@ -333,7 +344,10 @@ def assess_operations_candidates(
                     status="failed",
                     rationale="Operations candidate assessment failed",
                     evidence_references=candidate.eta_evidence_references,
-                    details={"candidate_id": candidate.option_id},
+                    details={
+                        "candidate_id": candidate.option_id,
+                        "timeout_seconds": timeout_seconds,
+                    },
                 )
                 if audit_error is not None:
                     errors.append(audit_error)
